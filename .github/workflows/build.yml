@@ -16,10 +16,11 @@ jobs:
       # 拉取仓库代码
       - uses: actions/checkout@v4
 
-      # 设置镜像名，注意全小写，OWNER 必须是你的个人账户名
+      # 设置镜像名：自动把用户名小写
       - name: Set image name
         run: |
-          echo "IMAGE_NAME=ghcr.io/lanlan/ovpn-socks5:${{ github.event.inputs.tag }}" >> $GITHUB_ENV
+          OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_NAME=ghcr.io/${OWNER_LOWER}/ovpn-socks5:${{ github.event.inputs.tag }}" >> $GITHUB_ENV
 
       # 登录 GHCR（个人账户 + 默认 GITHUB_TOKEN）
       - name: Log in to GHCR
