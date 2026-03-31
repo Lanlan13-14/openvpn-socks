@@ -1,0 +1,21 @@
+name: Build Docker Image
+
+# 手动触发
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login DockerHub
+        run: echo "${{ secrets.DOCKER_PASS }}" | docker login -u "${{ secrets.DOCKER_USER }}" --password-stdin
+
+      - name: Build Image
+        run: docker build -t ${{ secrets.DOCKER_USER }}/ovpn-socks5:latest .
+
+      - name: Push Image
+        run: docker push ${{ secrets.DOCKER_USER }}/ovpn-socks5:latest
