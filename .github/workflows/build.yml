@@ -1,8 +1,12 @@
-name: Build Docker Image
+name: Build Docker Image to GHCR
 
-# 手动触发
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: '镜像 tag'
+        required: true
+        default: 'v1.0.0'
 
 jobs:
   build:
@@ -11,11 +15,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Login DockerHub
-        run: echo "${{ secrets.DOCKER_PASS }}" | docker login -u "${{ secrets.DOCKER_USER }}" --password-stdin
+      - name: Set image name
+        run: |
+          echo "IMAGE_NAME=ghcr.io/${{ github.repository_owner }}/ovpn-socks5:${{ github.event.inputs.tag }}" >> $GITHUB_ENV
 
-      - name: Build Image
-        run: docker build -t ${{ secrets.DOCKER_USER }}/ovpn-socks5:latest .
+      - name: Log in to GHCR
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push Image
-        run: docker push ${{ secrets.DOCKER_USER }}/ovpn-socks5:latest
+      - name: Build Docker image
+        run: docker build -t $IMAGE_NAME .
+
+      - name: Push Docker image
+        run: docker push $IMAGE_NAME
