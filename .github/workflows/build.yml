@@ -17,7 +17,7 @@ jobs:
 
       - name: Set image name
         run: |
-          echo "IMAGE_NAME=ghcr.io/${{ github.repository_owner }}/ovpn-socks5:${{ github.event.inputs.tag }}" >> $GITHUB_ENV
+          echo "IMAGE_NAME=ghcr.io/lanlan13-14/ovpn-socks5:${{ github.event.inputs.tag }}" >> $GITHUB_ENV
 
       - name: Log in to GHCR
         uses: docker/login-action@v2
