@@ -13,12 +13,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 拉取代码
       - uses: actions/checkout@v4
 
+      # 设置镜像名字（全小写）
       - name: Set image name
         run: |
           echo "IMAGE_NAME=ghcr.io/lanlan13-14/ovpn-socks5:${{ github.event.inputs.tag }}" >> $GITHUB_ENV
 
+      # 登录 GHCR（个人账户 + 默认 GITHUB_TOKEN）
       - name: Log in to GHCR
         uses: docker/login-action@v2
         with:
@@ -26,8 +29,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # 构建 Docker 镜像
       - name: Build Docker image
         run: docker build -t $IMAGE_NAME .
 
+      # 推送镜像到 GHCR
       - name: Push Docker image
         run: docker push $IMAGE_NAME
