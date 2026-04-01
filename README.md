@@ -17,25 +17,15 @@ ovpn-socks5
 ---
 
 📦 镜像
-
+```
 ghcr.io/lanlan13-14/ovpn-socks5:latest
-ghcr.io/lanlan13-14/ovpn-socks5:v1.0.0
+```
 
----
-
-📁 目录结构
-
-/root/ovpn/
-  ├── hk.ovpn
-  ├── sg.ovpn
-  ├── jp.ovpn
-
----
 
 🚀 使用方法
 
 方式一：指定配置文件（推荐）
-
+```
 docker run -d \
   --name ovpn-socks5 \
   --cap-add=NET_ADMIN \
@@ -44,11 +34,10 @@ docker run -d \
   -e OVPN_FILE=hk.ovpn \
   -p 1080:1080 \
   ghcr.io/lanlan13-14/ovpn-socks5:latest
-
----
+```
 
 方式二：自动选择（不推荐）
-
+```
 docker run -d \
   --name ovpn-socks5 \
   --cap-add=NET_ADMIN \
@@ -56,7 +45,7 @@ docker run -d \
   -v /root/ovpn:/vpn \
   -p 1080:1080 \
   ghcr.io/lanlan13-14/ovpn-socks5:latest
-
+```
 👉 会自动选择 "/vpn" 目录下第一个 ".ovpn"
 
 ---
@@ -113,7 +102,3 @@ ls /root/ovpn
 --cap-add=NET_ADMIN
 
 ---
-
-📄 License
-
-MIT
