@@ -9,7 +9,7 @@ on:
         default: 'v1.0.0'
 
 permissions:
-  contents: read
+  contents: write   # ⚠️ 必须改成 write（要创建 release）
   packages: write
 
 jobs:
@@ -23,6 +23,7 @@ jobs:
         run: |
           OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           VERSION_TAG=${{ github.event.inputs.tag }}
+          echo "VERSION_TAG=${VERSION_TAG}" >> $GITHUB_ENV
           echo "IMAGE_TAG=ghcr.io/${OWNER_LOWER}/ovpn-socks5:${VERSION_TAG}" >> $GITHUB_ENV
           echo "IMAGE_LATEST=ghcr.io/${OWNER_LOWER}/ovpn-socks5:latest" >> $GITHUB_ENV
 
@@ -41,3 +42,28 @@ jobs:
         run: |
           docker push $IMAGE_TAG
           docker push $IMAGE_LATEST
+
+      # ✅ 自动生成更新日志（基于 commit）
+      - name: Generate changelog
+        id: changelog
+        run: |
+          echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+          git log -n 10 --pretty=format:"- %s" >> $GITHUB_ENV
+          echo "" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      # ✅ 创建 Release
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION_TAG }}
+          name: Release ${{ env.VERSION_TAG }}
+          body: |
+            ## 🚀 更新内容
+            ${{ env.CHANGELOG }}
+
+            ## 📦 Docker
+            ```
+            docker pull ${{ env.IMAGE_TAG }}
+            docker pull ${{ env.IMAGE_LATEST }}
+            ```
