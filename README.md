@@ -1,54 +1,53 @@
-# OVPN-SOCKS5 Docker 镜像
+ovpn-socks5
 
-这是一个将 **OpenVPN 转 SOCKS5（支持 UDP）** 的 Docker 镜像。  
-使用 OpenVPN 配置文件启动 VPN，并自动运行 Xray 提供 SOCKS5 代理。
+一个基于 OpenVPN + Xray 的 SOCKS5 代理容器。
+容器启动后自动连接 VPN，并提供 SOCKS5 代理服务。
 
-镜像地址（GHCR）：
+---
 
+✨ 特性
+
+- 支持任意 ".ovpn" 配置文件名
+- 支持手动指定配置文件（推荐）
+- 自动等待 VPN 连接
+- 自动切换默认路由
+- 内置 Xray 提供 SOCKS5
+- 支持 "latest" + 版本 tag
+
+---
+
+📦 镜像
+
+ghcr.io/lanlan13-14/ovpn-socks5:latest
 ghcr.io/lanlan13-14/ovpn-socks5:v1.0.0
 
 ---
 
-## ⚡ 功能
+📁 目录结构
 
-- 将 OpenVPN 连接转为 SOCKS5 代理
-- 支持 UDP 流量
-- 自动设置默认路由走 VPN
-- 集成 Xray，用作本地代理
-- 容器化运行，方便部署
-
----
-
-## 🛠️ 使用方法
-
-### 1. 准备 OpenVPN 配置文件
-
-在宿主机创建目录：
-
-```bash
-mkdir -p /root/ovpn
-
-将你的 OpenVPN 配置文件放入：
-
-/root/ovpn/client.ovpn
-
-如果 OpenVPN 需要用户名密码，可创建 auth.txt：
-
-/root/ovpn/auth.txt
-
-内容示例：
-
-username
-password
-
-并在 .ovpn 文件中引用：
-
-auth-user-pass /vpn/auth.txt
-
+/root/ovpn/
+  ├── hk.ovpn
+  ├── sg.ovpn
+  ├── jp.ovpn
 
 ---
 
-2. 启动容器
+🚀 使用方法
+
+方式一：指定配置文件（推荐）
+
+docker run -d \
+  --name ovpn-socks5 \
+  --cap-add=NET_ADMIN \
+  --device /dev/net/tun \
+  -v /root/ovpn:/vpn \
+  -e OVPN_FILE=hk.ovpn \
+  -p 1080:1080 \
+  ghcr.io/lanlan13-14/ovpn-socks5:latest
+
+---
+
+方式二：自动选择（不推荐）
 
 docker run -d \
   --name ovpn-socks5 \
@@ -56,59 +55,65 @@ docker run -d \
   --device /dev/net/tun \
   -v /root/ovpn:/vpn \
   -p 1080:1080 \
-  ghcr.io/lanlan13-14/ovpn-socks5:v1.0.0
+  ghcr.io/lanlan13-14/ovpn-socks5:latest
 
-说明：
-
---cap-add=NET_ADMIN + --device /dev/net/tun → TUN 权限
-
--v /root/ovpn:/vpn → 挂载本地 OpenVPN 配置文件
-
--p 1080:1080 → 映射容器 SOCKS5 端口到宿主机
-
-
+👉 会自动选择 "/vpn" 目录下第一个 ".ovpn"
 
 ---
 
-3. 验证
+🔌 SOCKS5 连接
 
-查看容器日志：
-
-docker logs -f ovpn-socks5
-
-确认 OpenVPN 已成功连接，并且 Xray 已启动 SOCKS5 服务。
-
-测试 SOCKS5 代理：
-
-curl --socks5 127.0.0.1:1080 ifconfig.me
-
+地址: 服务器IP
+端口: 1080
 
 ---
 
-4. 停止/重启
+⚙️ 环境变量
 
-停止容器：
+变量名| 说明
+OVPN_FILE| 指定使用的 OpenVPN 配置文件
 
-docker stop ovpn-socks5
-docker rm ovpn-socks5
+---
 
-重启容器：
+🧠 工作流程
 
-docker start ovpn-socks5
-
+1. 读取 "OVPN_FILE"
+2. 启动 OpenVPN
+3. 等待 "tun0" 建立
+4. 默认路由切换到 VPN
+5. 启动 Xray
 
 ---
 
 ⚠️ 注意事项
 
-1. 镜像只提供工具，必须挂载 .ovpn 配置文件
+- 必须挂载 "/vpn"
+- 必须开启：
+  - "--cap-add=NET_ADMIN"
+  - "/dev/net/tun"
+- ".ovpn" 文件必须可用（包含认证）
 
+---
 
-2. 容器默认将所有流量通过 VPN
+🛠️ 常见问题
 
+❌ 配置文件不存在
 
-3. 如果 OpenVPN 需要用户名密码，必须挂载 auth.txt 并在配置中引用
+检查：
 
+ls /root/ovpn
 
-4. 镜像内固定读取 /vpn/client.ovpn，可通过修改 entrypoint 支持环境变量指定文件名
+---
 
+❌ 没有 tun0
+
+确保容器参数包含：
+
+--device /dev/net/tun
+--cap-add=NET_ADMIN
+
+---
+
+📄 License
+
+MIT
