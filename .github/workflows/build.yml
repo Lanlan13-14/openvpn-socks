@@ -9,15 +9,19 @@ on:
         default: 'v1.0.0'
 
 permissions:
-  contents: write   # ⚠️ 必须改成 write（要创建 release）
+  contents: write
   packages: write
+
+env:
+  # ✅ 提前启用 Node 24（避免未来炸）
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set image names
         run: |
@@ -28,11 +32,7 @@ jobs:
           echo "IMAGE_LATEST=ghcr.io/${OWNER_LOWER}/ovpn-socks5:latest" >> $GITHUB_ENV
 
       - name: Log in to GHCR
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+        uses: docker/login-action@v3
 
       - name: Build Docker image
         run: |
@@ -43,16 +43,13 @@ jobs:
           docker push $IMAGE_TAG
           docker push $IMAGE_LATEST
 
-      # ✅ 自动生成更新日志（基于 commit）
       - name: Generate changelog
-        id: changelog
         run: |
           echo "CHANGELOG<<EOF" >> $GITHUB_ENV
           git log -n 10 --pretty=format:"- %s" >> $GITHUB_ENV
           echo "" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
-      # ✅ 创建 Release
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -63,7 +60,5 @@ jobs:
             ${{ env.CHANGELOG }}
 
             ## 📦 Docker
-            ```
             docker pull ${{ env.IMAGE_TAG }}
             docker pull ${{ env.IMAGE_LATEST }}
-            ```
