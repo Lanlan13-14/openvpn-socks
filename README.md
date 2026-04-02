@@ -92,10 +92,12 @@ docker run -d \
 
 ⚙️ 环境变量
 
+```
 变量名| 说明
 "OVPN_FILE"| 指定 OpenVPN 配置文件
 "VPN_USERNAME"| VPN 用户名（可选）
 "VPN_PASSWORD"| VPN 密码（可选）
+```
 
 ---
 
