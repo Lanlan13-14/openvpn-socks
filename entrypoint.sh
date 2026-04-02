@@ -20,17 +20,49 @@ fi
 
 echo "✅ 使用配置文件: $CONFIG"
 
-echo "[2] 启动 OpenVPN..."
-openvpn --config "$CONFIG" --daemon
+# =========================
+# 🔐 账号密码支持
+# =========================
+AUTH_FILE="/tmp/auth.txt"
 
-echo "[3] 等待 VPN 连接 (tun0)..."
-while ! ip a | grep -q tun0; do
-  sleep 1
-done
+if [ -n "$VPN_USERNAME" ] && [ -n "$VPN_PASSWORD" ]; then
+  echo "[2] 启用用户名密码认证"
 
-echo "[4] 设置默认路由走 VPN"
-ip route del default || true
-ip route add default dev tun0
+  printf "%s\n%s\n" "$VPN_USERNAME" "$VPN_PASSWORD" > "$AUTH_FILE"
+  chmod 600 "$AUTH_FILE"
 
-echo "[5] 启动 Xray..."
-exec xray -config /etc/xray.json
+  if grep -q "^auth-user-pass" "$CONFIG"; then
+    echo "[INFO] 替换已有 auth-user-pass"
+    sed -i "s|^auth-user-pass.*|auth-user-pass $AUTH_FILE|" "$CONFIG"
+  else
+    echo "[INFO] 添加 auth-user-pass"
+    echo "auth-user-pass $AUTH_FILE" >> "$CONFIG"
+  fi
+else
+  echo "[2] 未提供用户名密码"
+fi
+
+echo "[3] 启动 OpenVPN（前台 + 自动重连）..."
+
+# 后台等待 tun0 并设置路由
+(
+  echo "[4] 等待 VPN 连接 (tun0)..."
+  while ! ip a | grep -q tun0; do
+    sleep 1
+  done
+
+  echo "[5] 设置默认路由走 VPN"
+  ip route del default || true
+  ip route add default dev tun0
+
+  echo "[6] 启动 Xray..."
+  exec xray -config /etc/xray.json
+) &
+
+# 👉 OpenVPN 前台运行（关键！）
+exec openvpn --config "$CONFIG" \
+  --resolv-retry infinite \
+  --persist-key \
+  --persist-tun \
+  --keepalive 10 60 \
+  --verb 3
