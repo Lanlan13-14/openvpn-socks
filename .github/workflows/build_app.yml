@@ -1,0 +1,109 @@
+name: Build & Release Flutter OVPN-SOCKS5 App
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  # ------------------------
+  # Flutter App multi-platform
+  # ------------------------
+  build_app:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION_TAG: ${{ github.event.inputs.version }}
+      XRAY_DIR: xray
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.13.0"
+
+      - name: Install Flutter dependencies
+        working-directory: flutter_app
+        run: flutter pub get
+
+      - name: Download Xray binaries
+        run: |
+          chmod +x scripts/download_xray.sh
+          ./scripts/download_xray.sh
+
+      - name: Build Flutter App
+        working-directory: flutter_app
+        run: |
+          if [ "${{ matrix.platform }}" == "linux" ]; then
+            flutter build linux --release
+          elif [ "${{ matrix.platform }}" == "macos" ]; then
+            flutter build macos --release
+          elif [ "${{ matrix.platform }}" == "windows" ]; then
+            flutter build windows --release
+          fi
+
+      - name: Archive platform artifacts
+        run: |
+          mkdir -p release/${{ matrix.platform }}
+          if [ "${{ matrix.platform }}" == "linux" ]; then
+            cp -r flutter_app/build/linux/release/bundle/* release/linux/
+          elif [ "${{ matrix.platform }}" == "macos" ]; then
+            cp -r flutter_app/build/macos/Build/Products/Release/* release/macos/
+          elif [ "${{ matrix.platform }}" == "windows" ]; then
+            cp -r flutter_app/build/windows/runner/Release/* release/windows/
+
+  # ------------------------
+  # Android APK
+  # ------------------------
+  build_android:
+    runs-on: ubuntu-latest
+    needs: build_app
+    env:
+      VERSION_TAG: ${{ github.event.inputs.version }}
+      XRAY_DIR: xray
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.13.0"
+
+      - name: Install Flutter dependencies
+        working-directory: flutter_app
+        run: flutter pub get
+
+      - name: Download Xray binaries
+        run: |
+          chmod +x scripts/download_xray.sh
+          ./scripts/download_xray.sh
+
+      - name: Build Android APK
+        working-directory: flutter_app
+        run: flutter build apk --release
+
+      - name: Archive APK
+        run: |
+          mkdir -p release/android
+          cp flutter_app/build/app/outputs/flutter-apk/app-release.apk release/android/ovpn_socks5.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION_TAG }}
+          name: Release ${{ env.VERSION_TAG }}
+          files: release/**/*
