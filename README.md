@@ -34,6 +34,7 @@ docker run -d \
   -v /root/ovpn:/vpn \
   -e OVPN_FILE=hk.ovpn \
   -p 1080:1080 \
+  -p 1080:1080/udp \
   --restart always \
   ghcr.io/lanlan13-14/ovpn-socks5:latest
 ```
@@ -47,6 +48,7 @@ docker run -d \
   --device /dev/net/tun \
   -v /root/ovpn:/vpn \
   -p 1080:1080 \
+  -p 1080:1080/udp \
   --restart always \
   ghcr.io/lanlan13-14/ovpn-socks5:latest
 ```
