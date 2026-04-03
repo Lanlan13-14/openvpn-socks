@@ -69,6 +69,7 @@ docker run -d \
   -e VPN_USERNAME=your_username \
   -e VPN_PASSWORD=your_password \
   -p 1080:1080 \
+  -p 1080:1080/udp \
   --restart always \
   ghcr.io/lanlan13-14/ovpn-socks5:latest
 ```
@@ -157,6 +158,7 @@ services:
       - VPN_PASSWORD=your_password
     ports:
       - "1080:1080"
+      - "1080:1080/udp"
 ```
 ---
 
