@@ -96,7 +96,7 @@ ghcr.io/lanlan13-14/ovpn-socks5:latest
 | 地址       | 服务器 IP |
 | 端口       | 1080（可通过环境变量 SOCKS_PORT 自定义） |
 | 用户认证   | 默认匿名，可通过环境变量 SOCKSUSER 和 SOCKSPASS 设置账号密码 |
-| UDP       | 支持（默认关闭，可在 xray.json 中修改） |
+| UDP       | 支持 |
 
 ---
 
