@@ -20,16 +20,16 @@ ovpn-socks5
 ---
 
 📦 镜像
-
+```
 ghcr.io/lanlan13-14/ovpn-socks5:latest
-
+```
 ---
 
 🚀 使用方法
 
 方式一：指定配置文件（推荐）
 
-`bash
+```bash
 docker run -d \
 --name ovpn-socks5 \
 --cap-add=NET_ADMIN \
@@ -40,11 +40,11 @@ docker run -d \
 -p 1080:1080/udp \
 --restart always \
 ghcr.io/lanlan13-14/ovpn-socks5:latest
-`
+```
 
 方式二：自动选择（不推荐）
 
-`bash
+```bash
 docker run -d \
 --name ovpn-socks5 \
 --cap-add=NET_ADMIN \
@@ -54,7 +54,7 @@ docker run -d \
 -p 1080:1080/udp \
 --restart always \
 ghcr.io/lanlan13-14/ovpn-socks5:latest
-`
+```
 
 > 👉 会自动选择 /vpn 目录下第一个 .ovpn 文件
 
@@ -64,7 +64,7 @@ ghcr.io/lanlan13-14/ovpn-socks5:latest
 
 如果你的 VPN 需要用户名和密码：
 
-`bash
+```bash
 docker run -d \
 --name ovpn-socks5 \
 --cap-add=NET_ADMIN \
@@ -77,7 +77,7 @@ docker run -d \
 -p 1080:1080/udp \
 --restart always \
 ghcr.io/lanlan13-14/ovpn-socks5:latest
-`
+```
 
 ✔ 行为说明
 
@@ -129,9 +129,9 @@ ghcr.io/lanlan13-14/ovpn-socks5:latest
 
 本项目使用 OpenVPN 内置重连机制：
 
-`bash
+```bash
 --keepalive 10 60 --resolv-retry infinite --persist-tun
-`
+```
 
 ✔ 行为
 
@@ -148,7 +148,7 @@ ghcr.io/lanlan13-14/ovpn-socks5:latest
 
 🐳 docker-compose 示例
 
-`yaml
+```yaml
 version: '3.8'
 
 services:
@@ -173,7 +173,7 @@ services:
     ports:
       - "1080:1080"
       - "1080:1080/udp"
-`
+```
 
 ---
 
@@ -194,17 +194,17 @@ services:
 
 ❌ 配置文件不存在
 
-`bash
+```bash
 ls /root/ovpn
-`
+```
 
 ❌ 没有 tun0  
 确保容器参数包含：
 
-`bash
+```bash
 --device /dev/net/tun
 --cap-add=NET_ADMIN
-`
+```
 
 ❌ VPN 已连接但无法上网  
 可能原因：
@@ -215,7 +215,6 @@ ls /root/ovpn
 
 ❌ SOCKS5 无法连接
 
-`bash
+```bash
 docker logs ovpn-socks5
-`
-`
+```
