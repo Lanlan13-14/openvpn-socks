@@ -18,6 +18,12 @@ RUN curl -L https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linu
     && chmod +x /usr/local/bin/xray \
     && rm -rf xray.zip
 
+# 👉 加这一段（tcping）
+RUN curl -L --retry 3 --retry-delay 2 \
+    https://raw.githubusercontent.com/Lanlan13-14/System-Easy/refs/heads/main/tcping.sh \
+    -o /usr/local/bin/tcping \
+    && chmod +x /usr/local/bin/tcping
+
 COPY entrypoint.sh /entrypoint.sh
 COPY xray.json /etc/xray.json
 
