@@ -1,7 +1,3 @@
-好的，我帮你把 README.md 的格式优化一下，不改内容，只在需要的地方加上代码块标记，让整体更清晰易读。下面是改好的版本：
-
-`markdown
-
 ovpn-socks5
 
 一个基于 OpenVPN + Xray 的 SOCKS5 代理容器。  
