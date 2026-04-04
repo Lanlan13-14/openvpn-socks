@@ -21,6 +21,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Set image names
         run: |
@@ -48,8 +50,22 @@ jobs:
 
       - name: Generate changelog
         run: |
+          git fetch --tags
+
+          CURRENT_TAG=${{ env.VERSION_TAG }}
+
+          PREV_TAG=$(git tag --sort=-creatordate | grep -v "^${CURRENT_TAG}$" | head -n 1)
+
           echo "CHANGELOG<<EOF" >> $GITHUB_ENV
-          git log -n 10 --pretty=format:"- %s" >> $GITHUB_ENV
+
+          if [ -z "$PREV_TAG" ]; then
+            echo "## 🚀 初始版本" >> $GITHUB_ENV
+            git log --pretty=format:"- %s (%h)" >> $GITHUB_ENV
+          else
+            echo "## 🚀 更新内容 ($PREV_TAG → $CURRENT_TAG)" >> $GITHUB_ENV
+            git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" >> $GITHUB_ENV
+          fi
+
           echo "" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
@@ -58,10 +74,4 @@ jobs:
         with:
           tag_name: ${{ env.VERSION_TAG }}
           name: Release ${{ env.VERSION_TAG }}
-          body: |
-            ## 🚀 更新内容
-            ${{ env.CHANGELOG }}
-
-            ## 📦 Docker
-            docker pull ${{ env.IMAGE_TAG }}
-            docker pull ${{ env.IMAGE_LATEST }}
+          body: ${{ env.CHANGELOG }}
