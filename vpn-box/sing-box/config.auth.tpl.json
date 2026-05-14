@@ -1,0 +1,77 @@
+{
+  "log": {
+    "level": "${SING_BOX_LOG_LEVEL}"
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "remote",
+        "address": "${DNS_SERVER}",
+        "detour": "proxy",
+        "strategy": "${DNS_STRATEGY}"
+      }
+    ],
+    "final": "remote",
+    "strategy": "${DNS_STRATEGY}"
+  },
+  "inbounds": [
+    {
+      "type": "direct",
+      "tag": "dns-in-udp",
+      "listen": "${DNS_LISTEN}",
+      "listen_port": ${DNS_PORT},
+      "network": "udp",
+      "override_address": "8.8.8.8",
+      "override_port": 53
+    },
+    {
+      "type": "direct",
+      "tag": "dns-in-tcp",
+      "listen": "${DNS_LISTEN}",
+      "listen_port": ${DNS_PORT},
+      "network": "tcp",
+      "override_address": "8.8.8.8",
+      "override_port": 53
+    },
+    {
+      "type": "tproxy",
+      "tag": "tproxy-in",
+      "listen": "0.0.0.0",
+      "listen_port": ${TPROXY_PORT},
+      "network": "tcp",
+      "sniff": false
+    },
+    {
+      "type": "tproxy",
+      "tag": "tproxy-in-udp",
+      "listen": "0.0.0.0",
+      "listen_port": ${TPROXY_PORT},
+      "network": "udp",
+      "sniff": false
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "socks",
+      "tag": "proxy",
+      "server": "${PROXY_HOST}",
+      "server_port": ${PROXY_PORT},
+      "username": "${PROXY_USER}",
+      "password": "${PROXY_PASS}",
+      "udp_over_tcp": ${PROXY_UDP}
+    },
+    {
+      "type": "dns",
+      "tag": "dns-out"
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "inbound": ["dns-in-udp", "dns-in-tcp"],
+        "outbound": "dns-out"
+      }
+    ],
+    "final": "proxy"
+  }
+}

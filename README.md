@@ -218,3 +218,46 @@ ls /root/ovpn
 ```bash
 docker logs ovpn-socks5
 ```
+
+---
+
+## 🧠 新增镜像：vpn-box 单容器 OpenVPN Server → sing-box → SOCKS5
+
+本仓库新增 `vpn-box/` 目录，提供一个独立镜像，不替换、不覆盖现有 `ovpn-socks5` 镜像。
+
+目标链路：
+
+```text
+OpenVPN Client
+  -> OpenVPN Server inside vpn-box
+  -> nftables TPROXY
+  -> sing-box tproxy inbound
+  -> upstream SOCKS5 outbound
+```
+
+特点：
+
+- 单容器完成 datapath；
+- 内置 OpenVPN Server；
+- 内置 sing-box 1.12，固定版本构建；
+- OpenVPN 客户端 DNS 默认指向 OpenVPN 网段网关，DNS 查询由 sing-box 通过 SOCKS5 outbound 远程解析；
+- 支持 `DNS_STRATEGY=prefer_ipv4|prefer_ipv6|ipv4_only|ipv6_only`；
+- 支持上游 SOCKS5 有认证和无认证两份 sing-box 配置模板；
+- 首次启动会在挂载的 `/openvpn` 目录自动生成 PKI 和客户端 `.ovpn` 文件；
+- 所有变量支持 `-e` 直接定义，也支持挂载 `env/*.env`；
+- 单独 GitHub Actions：`.github/workflows/build-vpn-box.yml`，支持手动输入版本号并生成更新日志，镜像名为 `ghcr.io/lanlan13-14/ovpn-socks-out`。
+
+快速运行：
+
+```bash
+cd vpn-box
+docker compose up -d --build
+```
+
+生成的客户端文件：
+
+```text
+vpn-box/openvpn/clients/client.ovpn
+```
+
+更多说明见：[`vpn-box/README.md`](vpn-box/README.md)。

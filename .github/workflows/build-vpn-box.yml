@@ -1,0 +1,86 @@
+name: Build VPN Box Docker Image to GHCR
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '镜像 tag'
+        required: true
+        default: 'vpn-box-v1.0.0'
+      sing_box_version:
+        description: 'sing-box 固定版本'
+        required: true
+        default: '1.12.0'
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set image names
+        run: |
+          OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          VERSION_TAG=${{ github.event.inputs.tag }}
+          echo "VERSION_TAG=${VERSION_TAG}" >> $GITHUB_ENV
+          echo "SING_BOX_VERSION=${{ github.event.inputs.sing_box_version }}" >> $GITHUB_ENV
+          echo "IMAGE_TAG=ghcr.io/${OWNER_LOWER}/ovpn-socks-out:${VERSION_TAG}" >> $GITHUB_ENV
+          echo "IMAGE_LATEST=ghcr.io/${OWNER_LOWER}/ovpn-socks-out:latest" >> $GITHUB_ENV
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --build-arg SING_BOX_VERSION=$SING_BOX_VERSION \
+            -t $IMAGE_TAG \
+            -t $IMAGE_LATEST \
+            ./vpn-box
+
+      - name: Push Docker image
+        run: |
+          docker push $IMAGE_TAG
+          docker push $IMAGE_LATEST
+
+      - name: Generate changelog
+        run: |
+          git fetch --tags
+
+          CURRENT_TAG=${{ env.VERSION_TAG }}
+
+          PREV_TAG=$(git tag --sort=-creatordate | grep -v "^${CURRENT_TAG}$" | head -n 1)
+
+          echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+
+          if [ -z "$PREV_TAG" ]; then
+            echo "## 🚀 初始版本" >> $GITHUB_ENV
+            git log --pretty=format:"- %s (%h)" >> $GITHUB_ENV
+          else
+            echo "## 🚀 更新内容 ($PREV_TAG → $CURRENT_TAG)" >> $GITHUB_ENV
+            git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" >> $GITHUB_ENV
+          fi
+
+          echo "" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION_TAG }}
+          name: ovpn-socks-out Release ${{ env.VERSION_TAG }}
+          body: ${{ env.CHANGELOG }}

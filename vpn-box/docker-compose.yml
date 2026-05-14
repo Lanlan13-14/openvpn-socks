@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  vpn-box:
+    build:
+      context: .
+      args:
+        SING_BOX_VERSION: "1.12.0"
+    image: vpn-box:local
+    container_name: vpn-box
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    volumes:
+      - ./env:/env:ro
+      - ./openvpn:/openvpn
+    restart: unless-stopped
