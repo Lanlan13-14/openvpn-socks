@@ -16,7 +16,6 @@ OpenVPN client
   -> upstream SOCKS5 outbound
 ```
 
-本目录是新增镜像，不会替换仓库根目录原有 `ovpn-socks5` 镜像。
 
 ## 目录
 
