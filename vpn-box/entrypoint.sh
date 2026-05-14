@@ -95,8 +95,8 @@ make_pki() {
   mkdir -p "$PKI_DIR"
   EASYRSA_PKI="$PKI_DIR" "$easyrsa_bin" --batch init-pki
   EASYRSA_PKI="$PKI_DIR" EASYRSA_REQ_CN="vpn-box-ca" "$easyrsa_bin" --batch build-ca nopass
-  EASYRSA_PKI="$PKI_DIR" EASYRSA_REQ_CN="server" "$easyrsa_bin" --batch build-server-full server nopass
-  EASYRSA_PKI="$PKI_DIR" EASYRSA_REQ_CN="${OVPN_CLIENT_NAME}" "$easyrsa_bin" --batch build-client-full "${OVPN_CLIENT_NAME}" nopass
+  EASYRSA_PKI="$PKI_DIR" "$easyrsa_bin" --batch build-server-full server nopass
+  EASYRSA_PKI="$PKI_DIR" "$easyrsa_bin" --batch build-client-full "${OVPN_CLIENT_NAME}" nopass
   openvpn --genkey secret "$PKI_DIR/ta.key"
 }
 
@@ -156,7 +156,7 @@ if [ ! -f "$PKI_DIR/issued/${OVPN_CLIENT_NAME}.crt" ] || [ ! -f "$PKI_DIR/privat
   if [ ! -x "$easyrsa_bin" ]; then
     easyrsa_bin=$(command -v easyrsa)
   fi
-  EASYRSA_PKI="$PKI_DIR" EASYRSA_REQ_CN="${OVPN_CLIENT_NAME}" "$easyrsa_bin" --batch build-client-full "${OVPN_CLIENT_NAME}" nopass
+  EASYRSA_PKI="$PKI_DIR" "$easyrsa_bin" --batch build-client-full "${OVPN_CLIENT_NAME}" nopass
 fi
 make_client_profile "$OVPN_CLIENT_NAME"
 
