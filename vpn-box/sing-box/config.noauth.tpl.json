@@ -5,14 +5,22 @@
   "dns": {
     "servers": [
       {
+        "type": "https",
         "tag": "remote",
-        "address": "${DNS_SERVER}",
-        "detour": "proxy",
+        "server": "${DNS_SERVER}",
+        "server_port": ${DNS_SERVER_PORT},
+        "path": "${DNS_PATH}",
+        "detour": "proxy"
+      }
+    ],
+    "rules": [
+      {
+        "action": "route",
+        "server": "remote",
         "strategy": "${DNS_STRATEGY}"
       }
     ],
-    "final": "remote",
-    "strategy": "${DNS_STRATEGY}"
+    "final": "remote"
   },
   "inbounds": [
     {
@@ -20,18 +28,14 @@
       "tag": "dns-in-udp",
       "listen": "${DNS_LISTEN}",
       "listen_port": ${DNS_PORT},
-      "network": "udp",
-      "override_address": "8.8.8.8",
-      "override_port": 53
+      "network": "udp"
     },
     {
       "type": "direct",
       "tag": "dns-in-tcp",
       "listen": "${DNS_LISTEN}",
       "listen_port": ${DNS_PORT},
-      "network": "tcp",
-      "override_address": "8.8.8.8",
-      "override_port": 53
+      "network": "tcp"
     },
     {
       "type": "tproxy",
@@ -57,17 +61,13 @@
       "server": "${PROXY_HOST}",
       "server_port": ${PROXY_PORT},
       "udp_over_tcp": ${PROXY_UDP}
-    },
-    {
-      "type": "dns",
-      "tag": "dns-out"
     }
   ],
   "route": {
     "rules": [
       {
         "inbound": ["dns-in-udp", "dns-in-tcp"],
-        "outbound": "dns-out"
+        "action": "hijack-dns"
       }
     ],
     "final": "proxy"
