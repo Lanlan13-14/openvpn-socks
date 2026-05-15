@@ -193,7 +193,8 @@ docker run -d \
 | `DNS_TLS_SERVER_NAME` | `cloudflare-dns.com` | DoH TLS SNI / 证书域名 |
 | `DNS_STRATEGY` | `prefer_ipv4` | DNS 结果策略：`prefer_ipv4`、`prefer_ipv6`、`ipv4_only`、`ipv6_only` |
 | `DNS_LISTEN` | `127.0.0.1` | sing-box 本地 DNS 接收地址 |
-| `DNS_PORT` | `1053` | sing-box 本地 DNS 接收端口 |
+| `DNS_PORT` | `1053` | 保留变量，当前 DNS 通过 TPROXY/hijack-dns 处理 |
+| `ENABLE_DIAGNOSTICS` | `0` | 设置为 `1` 时启动时打印 sing-box 配置、ip rule、策略路由和 iptables 规则，便于排查 |
 
 ## OpenVPN DCO
 

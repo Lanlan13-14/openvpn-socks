@@ -54,13 +54,12 @@ load_env_file /env/runtime.env
 : "${DNS_PATH:=/dns-query}"
 : "${DNS_TLS_SERVER_NAME:=cloudflare-dns.com}"
 : "${DNS_STRATEGY:=prefer_ipv4}"
-: "${DNS_LISTEN:=127.0.0.1}"
-: "${DNS_PORT:=1053}"
+: "${ENABLE_DIAGNOSTICS:=0}"
 
 export OVPN_PROTO OVPN_PORT OVPN_DEV OVPN_DNS OVPN_NETWORK OVPN_NETMASK OVPN_CIDR OVPN_SERVER_IP OVPN_MAX_CLIENTS OVPN_DUPLICATE_CN OVPN_CLIENT_TO_CLIENT OVPN_CLIENT_NAME OVPN_SERVER_ADDR
 export OVPN_CIPHER OVPN_DATA_CIPHERS OVPN_AUTH OVPN_VERB OVPN_DUPLICATE_CN_CONFIG OVPN_CLIENT_TO_CLIENT_CONFIG
 export PROXY_HOST PROXY_PORT PROXY_USER PROXY_PASS PROXY_UDP
-export MARK TABLE_ID TPROXY_PORT FULL_PROXY TPROXY_BACKEND SING_BOX_LOG_LEVEL DNS_SERVER DNS_SERVER_PORT DNS_PATH DNS_TLS_SERVER_NAME DNS_STRATEGY DNS_LISTEN DNS_PORT
+export MARK TABLE_ID TPROXY_PORT FULL_PROXY TPROXY_BACKEND SING_BOX_LOG_LEVEL DNS_SERVER DNS_SERVER_PORT DNS_PATH DNS_TLS_SERVER_NAME DNS_STRATEGY ENABLE_DIAGNOSTICS
 
 if [ "${OVPN_DNS}" = "auto" ] || [ -z "${OVPN_DNS}" ]; then
   OVPN_DNS="${OVPN_SERVER_IP}"
@@ -173,6 +172,9 @@ else
 fi
 envsubst < /nft/rules.nft.tpl > /tmp/rules.nft
 
+log "[4.1] generated sing-box config:"
+sed -E 's/("password"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"***"/; s/("username"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"***"/' "$SING_BOX_CONF" || true
+
 log "[5] enabling routing..."
 sysctl -w net.ipv4.ip_forward=1 >/dev/null || true
 sysctl -w net.ipv4.conf.all.route_localnet=1 >/dev/null || true
@@ -184,17 +186,23 @@ if [ "${TPROXY_BACKEND}" = "nft" ]; then
     exit 1
   fi
 else
-  iptables -t mangle -D PREROUTING -i "${OVPN_DEV}" -p tcp -j MARK --set-mark "${MARK}" 2>/dev/null || true
-  iptables -t mangle -D PREROUTING -i "${OVPN_DEV}" -p udp -j MARK --set-mark "${MARK}" 2>/dev/null || true
-  iptables -t mangle -D PREROUTING -i "${OVPN_DEV}" -p tcp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}" 2>/dev/null || true
-  iptables -t mangle -D PREROUTING -i "${OVPN_DEV}" -p udp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}" 2>/dev/null || true
-  iptables -t mangle -A PREROUTING -i "${OVPN_DEV}" -p tcp ! -d "${OVPN_CIDR}" -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}"
-  iptables -t mangle -A PREROUTING -i "${OVPN_DEV}" -p udp ! -d "${OVPN_CIDR}" -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}"
+  iptables -t mangle -D PREROUTING -i "${OVPN_DEV}" -p tcp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}" 2>/dev/null || true
+  iptables -t mangle -D PREROUTING -i "${OVPN_DEV}" -p udp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}" 2>/dev/null || true
+  iptables -t mangle -A PREROUTING -i "${OVPN_DEV}" -p tcp ! -d "${OVPN_CIDR}" -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}"
+  iptables -t mangle -A PREROUTING -i "${OVPN_DEV}" -p udp ! -d "${OVPN_CIDR}" -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}"
 fi
 
 log "[7] configuring policy routing..."
+ip rule del fwmark "${MARK}" table "${TABLE_ID}" 2>/dev/null || true
 ip rule add fwmark "${MARK}" table "${TABLE_ID}" 2>/dev/null || true
-ip route add local 0.0.0.0/0 dev lo table "${TABLE_ID}" 2>/dev/null || true
+ip route replace local 0.0.0.0/0 dev lo table "${TABLE_ID}"
+
+if [ "${ENABLE_DIAGNOSTICS}" = "1" ] || [ "${ENABLE_DIAGNOSTICS}" = "true" ]; then
+  log "[diag] ip rule"; ip rule || true
+  log "[diag] route table ${TABLE_ID}"; ip route show table "${TABLE_ID}" || true
+  log "[diag] mangle PREROUTING"; iptables -t mangle -S PREROUTING || true
+  log "[diag] nat PREROUTING"; iptables -t nat -S PREROUTING || true
+fi
 
 log "[8] starting sing-box..."
 sing-box run -c "$SING_BOX_CONF" &
