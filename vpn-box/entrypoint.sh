@@ -55,11 +55,12 @@ load_env_file /env/runtime.env
 : "${DNS_TLS_SERVER_NAME:=cloudflare-dns.com}"
 : "${DNS_STRATEGY:=prefer_ipv4}"
 : "${ENABLE_DIAGNOSTICS:=0}"
+: "${PROXY_CHECK_URL:=https://www.cloudflare.com/cdn-cgi/trace}"
 
 export OVPN_PROTO OVPN_PORT OVPN_DEV OVPN_DNS OVPN_NETWORK OVPN_NETMASK OVPN_CIDR OVPN_SERVER_IP OVPN_MAX_CLIENTS OVPN_DUPLICATE_CN OVPN_CLIENT_TO_CLIENT OVPN_CLIENT_NAME OVPN_SERVER_ADDR
 export OVPN_CIPHER OVPN_DATA_CIPHERS OVPN_AUTH OVPN_VERB OVPN_DUPLICATE_CN_CONFIG OVPN_CLIENT_TO_CLIENT_CONFIG
 export PROXY_HOST PROXY_PORT PROXY_USER PROXY_PASS PROXY_UDP
-export MARK TABLE_ID TPROXY_PORT FULL_PROXY TPROXY_BACKEND SING_BOX_LOG_LEVEL DNS_SERVER DNS_SERVER_PORT DNS_PATH DNS_TLS_SERVER_NAME DNS_STRATEGY ENABLE_DIAGNOSTICS
+export MARK TABLE_ID TPROXY_PORT FULL_PROXY TPROXY_BACKEND SING_BOX_LOG_LEVEL DNS_SERVER DNS_SERVER_PORT DNS_PATH DNS_TLS_SERVER_NAME DNS_STRATEGY ENABLE_DIAGNOSTICS PROXY_CHECK_URL
 
 if [ "${OVPN_DNS}" = "auto" ] || [ -z "${OVPN_DNS}" ]; then
   OVPN_DNS="${OVPN_SERVER_IP}"
@@ -207,6 +208,21 @@ fi
 log "[8] starting sing-box..."
 sing-box run -c "$SING_BOX_CONF" &
 SING_BOX_PID=$!
+
+if [ "${ENABLE_DIAGNOSTICS}" = "1" ] || [ "${ENABLE_DIAGNOSTICS}" = "true" ]; then
+  (
+    sleep 2
+    log "[diag] checking SOCKS5 outbound via curl..."
+    curl -fsS --connect-timeout 5 --max-time 12 \
+      --socks5-hostname "${PROXY_USER:+${PROXY_USER}:${PROXY_PASS}@}${PROXY_HOST}:${PROXY_PORT}" \
+      "${PROXY_CHECK_URL}" || log "[diag] SOCKS5 outbound check failed"
+    log "[diag] checking DoH via SOCKS5 outbound..."
+    curl -fsS --connect-timeout 5 --max-time 12 \
+      --socks5-hostname "${PROXY_USER:+${PROXY_USER}:${PROXY_PASS}@}${PROXY_HOST}:${PROXY_PORT}" \
+      -H 'accept: application/dns-json' \
+      "https://${DNS_TLS_SERVER_NAME}${DNS_PATH}?name=example.com&type=A" || log "[diag] DoH over SOCKS5 check failed"
+  ) &
+fi
 
 log "[9] starting openvpn..."
 openvpn --config "$SERVER_CONF" &
