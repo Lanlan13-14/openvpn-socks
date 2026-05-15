@@ -89,6 +89,7 @@ docker run -d \
   --name vpn-box \
   --network host \
   --cap-add NET_ADMIN \
+  --cap-add SYS_MODULE \
   --device /dev/net/tun \
   -v "$PWD/openvpn:/openvpn" \
   -e PROXY_HOST=1.2.3.4 \
@@ -105,6 +106,7 @@ docker run -d \
   --name vpn-box \
   --network host \
   --cap-add NET_ADMIN \
+  --cap-add SYS_MODULE \
   --device /dev/net/tun \
   -v "$PWD/openvpn:/openvpn" \
   -e PROXY_HOST=1.2.3.4 \
@@ -126,7 +128,7 @@ docker run -d \
 | --- | --- | --- |
 | `OVPN_PROTO` | `udp` | OpenVPN 协议 |
 | `OVPN_PORT` | `1194` | OpenVPN 端口 |
-| `OVPN_DEV` | `tun0` | OpenVPN 服务端 tun 设备名，nft 默认只透明代理该接口流量 |
+| `OVPN_DEV` | `tun0` | OpenVPN 服务端 tun 设备名，透明代理规则默认只处理该接口流量 |
 | `OVPN_DNS` | `auto` | 推送给客户端的 DNS；`auto` 表示使用 `OVPN_SERVER_IP`，即 OpenVPN 网段网关 |
 | `OVPN_NETWORK` | `10.8.0.0` | VPN 网段 |
 | `OVPN_NETMASK` | `255.255.255.0` | VPN 掩码 |
@@ -174,6 +176,7 @@ docker run -d \
 | `MARK` | `1` | TPROXY fwmark |
 | `TABLE_ID` | `100` | 策略路由表 |
 | `TPROXY_PORT` | `7893` | sing-box tproxy 监听端口 |
+| `TPROXY_BACKEND` | `iptables` | 透明代理规则后端：默认 `iptables`，可改为 `nft` |
 | `FULL_PROXY` | `1` | 保留变量，默认全代理 |
 | `SING_BOX_LOG_LEVEL` | `warning` | sing-box 日志级别 |
 | `DNS_SERVER` | `https://1.1.1.1/dns-query` | 远程 DNS 服务器，sing-box 通过 SOCKS5 outbound 查询 |
@@ -199,6 +202,6 @@ modprobe ovpn-dco
 
 - 推荐 `network_mode: host` / `--network host`。
 - 需要 `NET_ADMIN` 和 `/dev/net/tun`。
-- 如果宿主机权限限制导致 nftables 失败，可改用 `privileged: true` 测试。
+- 默认使用 iptables TPROXY，避免部分 Alpine/nftables/宿主机组合下 `nft -f` 崩溃；如需 nft，可设置 `TPROXY_BACKEND=nft`。
 - 上游 SOCKS5 必须支持 UDP，否则 UDP 业务不可用。
 - Docker daemon 如需完全避免网络规则干预，可在宿主机 Docker 配置中设置 `iptables: false`，这不是容器内配置。

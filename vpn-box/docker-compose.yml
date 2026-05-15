@@ -11,6 +11,7 @@ services:
     network_mode: host
     cap_add:
       - NET_ADMIN
+      - SYS_MODULE
     devices:
       - /dev/net/tun
     volumes:

@@ -46,6 +46,7 @@ load_env_file /env/runtime.env
 : "${MARK:=1}"
 : "${TABLE_ID:=100}"
 : "${TPROXY_PORT:=7893}"
+: "${TPROXY_BACKEND:=iptables}"
 : "${FULL_PROXY:=1}"
 : "${SING_BOX_LOG_LEVEL:=warning}"
 : "${DNS_SERVER:=https://1.1.1.1/dns-query}"
@@ -56,7 +57,7 @@ load_env_file /env/runtime.env
 export OVPN_PROTO OVPN_PORT OVPN_DEV OVPN_DNS OVPN_NETWORK OVPN_NETMASK OVPN_CIDR OVPN_SERVER_IP OVPN_MAX_CLIENTS OVPN_DUPLICATE_CN OVPN_CLIENT_TO_CLIENT OVPN_CLIENT_NAME OVPN_SERVER_ADDR
 export OVPN_CIPHER OVPN_DATA_CIPHERS OVPN_AUTH OVPN_VERB OVPN_DUPLICATE_CN_CONFIG OVPN_CLIENT_TO_CLIENT_CONFIG
 export PROXY_HOST PROXY_PORT PROXY_USER PROXY_PASS PROXY_UDP
-export MARK TABLE_ID TPROXY_PORT FULL_PROXY SING_BOX_LOG_LEVEL DNS_SERVER DNS_STRATEGY DNS_LISTEN DNS_PORT
+export MARK TABLE_ID TPROXY_PORT FULL_PROXY TPROXY_BACKEND SING_BOX_LOG_LEVEL DNS_SERVER DNS_STRATEGY DNS_LISTEN DNS_PORT
 
 if [ "${OVPN_DNS}" = "auto" ] || [ -z "${OVPN_DNS}" ]; then
   OVPN_DNS="${OVPN_SERVER_IP}"
@@ -177,8 +178,20 @@ iptables -t nat -D PREROUTING -i "${OVPN_DEV}" -p tcp --dport 53 -j REDIRECT --t
 iptables -t nat -A PREROUTING -i "${OVPN_DEV}" -p udp --dport 53 -j REDIRECT --to-ports "${DNS_PORT}"
 iptables -t nat -A PREROUTING -i "${OVPN_DEV}" -p tcp --dport 53 -j REDIRECT --to-ports "${DNS_PORT}"
 
-log "[6] loading nftables..."
-nft -f /tmp/rules.nft
+log "[6] loading transparent proxy rules..."
+if [ "${TPROXY_BACKEND}" = "nft" ]; then
+  if ! nft -f /tmp/rules.nft; then
+    log "nftables failed; set TPROXY_BACKEND=iptables or run container with --privileged if your host/kernel blocks nft"
+    exit 1
+  fi
+else
+  iptables -t mangle -D PREROUTING -i "${OVPN_DEV}" -p tcp -j MARK --set-mark "${MARK}" 2>/dev/null || true
+  iptables -t mangle -D PREROUTING -i "${OVPN_DEV}" -p udp -j MARK --set-mark "${MARK}" 2>/dev/null || true
+  iptables -t mangle -D PREROUTING -i "${OVPN_DEV}" -p tcp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}" 2>/dev/null || true
+  iptables -t mangle -D PREROUTING -i "${OVPN_DEV}" -p udp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}" 2>/dev/null || true
+  iptables -t mangle -A PREROUTING -i "${OVPN_DEV}" -p tcp ! -d "${OVPN_CIDR}" ! --dport 53 -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}"
+  iptables -t mangle -A PREROUTING -i "${OVPN_DEV}" -p udp ! -d "${OVPN_CIDR}" ! --dport 53 -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}"
+fi
 
 log "[7] configuring policy routing..."
 ip rule add fwmark "${MARK}" table "${TABLE_ID}" 2>/dev/null || true
