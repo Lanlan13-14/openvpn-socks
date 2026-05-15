@@ -21,7 +21,7 @@ load_env_file /env/runtime.env
 
 : "${OVPN_PROTO:=udp}"
 : "${OVPN_PORT:=1194}"
-: "${OVPN_DEV:=tun0}"
+: "${OVPN_DEV:=ovpn0}"
 : "${OVPN_DNS:=1.1.1.1}"
 : "${OVPN_NETWORK:=10.8.0.0}"
 : "${OVPN_NETMASK:=255.255.255.0}"

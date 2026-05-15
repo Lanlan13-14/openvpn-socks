@@ -96,6 +96,7 @@ docker run -d \
   -e PROXY_PORT=1080 \
   -e PROXY_UDP=true \
   -e DNS_STRATEGY=prefer_ipv4 \
+  -e OVPN_DEV=ovpn0 \
   ghcr.io/lanlan13-14/ovpn-socks-out:latest
 ```
 
@@ -115,6 +116,7 @@ docker run -d \
   -e PROXY_PASS=pass \
   -e PROXY_UDP=true \
   -e DNS_STRATEGY=prefer_ipv4 \
+  -e OVPN_DEV=ovpn0 \
   ghcr.io/lanlan13-14/ovpn-socks-out:latest
 ```
 
@@ -128,7 +130,7 @@ docker run -d \
 | --- | --- | --- |
 | `OVPN_PROTO` | `udp` | OpenVPN 协议 |
 | `OVPN_PORT` | `1194` | OpenVPN 端口 |
-| `OVPN_DEV` | `tun0` | OpenVPN 服务端 tun 设备名，透明代理规则默认只处理该接口流量 |
+| `OVPN_DEV` | `ovpn0` | OpenVPN 服务端 tun 设备名，透明代理规则默认只处理该接口流量 |
 | `OVPN_DNS` | `auto` | 推送给客户端的 DNS；`auto` 表示使用 `OVPN_SERVER_IP`，即 OpenVPN 网段网关 |
 | `OVPN_NETWORK` | `10.8.0.0` | VPN 网段 |
 | `OVPN_NETMASK` | `255.255.255.0` | VPN 掩码 |
@@ -202,6 +204,7 @@ modprobe ovpn-dco
 
 - 推荐 `network_mode: host` / `--network host`。
 - 需要 `NET_ADMIN` 和 `/dev/net/tun`。
+- 默认 `OVPN_DEV=ovpn0`，避免 host network 下与宿主机或残留 OpenVPN 的 `tun0` 冲突；如果确实需要可用 `-e OVPN_DEV=xxx` 自定义。
 - 默认使用 iptables TPROXY，避免部分 Alpine/nftables/宿主机组合下 `nft -f` 崩溃；如需 nft，可设置 `TPROXY_BACKEND=nft`。
 - 上游 SOCKS5 必须支持 UDP，否则 UDP 业务不可用。
 - Docker daemon 如需完全避免网络规则干预，可在宿主机 Docker 配置中设置 `iptables: false`，这不是容器内配置。

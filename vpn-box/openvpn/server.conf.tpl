@@ -9,7 +9,7 @@ ca /openvpn/pki/ca.crt
 cert /openvpn/pki/issued/server.crt
 key /openvpn/pki/private/server.key
 dh none
-ecdh-curve prime256v1
+tls-groups secp256r1
 
 tls-crypt /openvpn/pki/ta.key
 
