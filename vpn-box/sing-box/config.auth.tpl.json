@@ -13,7 +13,7 @@
         "tls": {
           "server_name": "${DNS_TLS_SERVER_NAME}"
         },
-        "detour": "proxy"
+        "detour": "${DNS_DETOUR}"
       }
     ],
     "rules": [
