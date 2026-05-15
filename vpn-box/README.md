@@ -130,7 +130,7 @@ docker run -d \
 | --- | --- | --- |
 | `OVPN_PROTO` | `udp` | OpenVPN 协议 |
 | `OVPN_PORT` | `1194` | OpenVPN 端口 |
-| `OVPN_DEV` | `ovpn0` | OpenVPN 服务端 tun 设备名，透明代理规则默认只处理该接口流量 |
+| `OVPN_DEV` | `ovpn0` | OpenVPN 服务端 tun 设备名；模板使用 `dev-type tun`，因此这里可用 `ovpn0` 避免 host network 下 `tun0` 冲突 |
 | `OVPN_DNS` | `auto` | 推送给客户端的 DNS；`auto` 表示使用 `OVPN_SERVER_IP`，即 OpenVPN 网段网关 |
 | `OVPN_NETWORK` | `10.8.0.0` | VPN 网段 |
 | `OVPN_NETMASK` | `255.255.255.0` | VPN 掩码 |

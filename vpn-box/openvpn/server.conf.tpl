@@ -1,6 +1,7 @@
 port ${OVPN_PORT}
 proto ${OVPN_PROTO}
 dev ${OVPN_DEV}
+dev-type tun
 topology subnet
 
 server ${OVPN_NETWORK} ${OVPN_NETMASK}
