@@ -166,7 +166,7 @@ docker run -d \
 
 ## DNS 远程解析
 
-默认 `OVPN_DNS=auto`，OpenVPN 会向客户端推送 OpenVPN 网段网关 `OVPN_SERVER_IP` 作为 DNS。sing-box 直接监听容器网络命名空间的 `0.0.0.0:53`，接收来自 OpenVPN 客户端的 TCP/UDP DNS 请求，然后使用新 DNS server 格式的 DoH 服务器 `DNS_SERVER` + `DNS_PATH`，并通过 `proxy` SOCKS5 outbound 发起远程解析。默认使用 `DNS_SERVER=1.1.1.1` 和 `DNS_TLS_SERVER_NAME=cloudflare-dns.com`，避免 DoH 服务器域名解析引导循环。
+默认 `OVPN_DNS=auto`，OpenVPN 会向客户端推送 OpenVPN 网段网关 `OVPN_SERVER_IP` 作为 DNS。来自 OpenVPN 设备的 TCP/UDP 流量，包括 53 端口 DNS，统一经 TPROXY 送入 sing-box；sing-box 根据官方 1.12 迁移文档先执行 `sniff`，识别 `protocol=dns` 后使用 `hijack-dns` 交给 DNS 模块，再通过新 DNS server 格式的 DoH 服务器 `DNS_SERVER` + `DNS_PATH`，并经 `proxy` SOCKS5 outbound 发起远程解析。默认使用 `DNS_SERVER=1.1.1.1` 和 `DNS_TLS_SERVER_NAME=cloudflare-dns.com`，避免 DoH 服务器域名解析引导循环。
 
 可通过 `DNS_STRATEGY` 控制查询结果偏好：
 

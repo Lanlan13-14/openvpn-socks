@@ -27,20 +27,6 @@
   },
   "inbounds": [
     {
-      "type": "direct",
-      "tag": "dns-in-udp",
-      "listen": "0.0.0.0",
-      "listen_port": 53,
-      "network": "udp"
-    },
-    {
-      "type": "direct",
-      "tag": "dns-in-tcp",
-      "listen": "0.0.0.0",
-      "listen_port": 53,
-      "network": "tcp"
-    },
-    {
       "type": "tproxy",
       "tag": "tproxy-in",
       "listen": "0.0.0.0",
@@ -71,7 +57,10 @@
   "route": {
     "rules": [
       {
-        "inbound": ["dns-in-udp", "dns-in-tcp"],
+        "action": "sniff"
+      },
+      {
+        "protocol": "dns",
         "action": "hijack-dns"
       }
     ],

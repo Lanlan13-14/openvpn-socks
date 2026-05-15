@@ -176,10 +176,6 @@ envsubst < /nft/rules.nft.tpl > /tmp/rules.nft
 log "[5] enabling routing..."
 sysctl -w net.ipv4.ip_forward=1 >/dev/null || true
 sysctl -w net.ipv4.conf.all.route_localnet=1 >/dev/null || true
-iptables -t nat -D PREROUTING -i "${OVPN_DEV}" -p udp --dport 53 -j REDIRECT --to-ports "${DNS_PORT}" 2>/dev/null || true
-iptables -t nat -D PREROUTING -i "${OVPN_DEV}" -p tcp --dport 53 -j REDIRECT --to-ports "${DNS_PORT}" 2>/dev/null || true
-iptables -t nat -D PREROUTING -i "${OVPN_DEV}" -p udp --dport 53 -j REDIRECT --to-ports 53 2>/dev/null || true
-iptables -t nat -D PREROUTING -i "${OVPN_DEV}" -p tcp --dport 53 -j REDIRECT --to-ports 53 2>/dev/null || true
 
 log "[6] loading transparent proxy rules..."
 if [ "${TPROXY_BACKEND}" = "nft" ]; then
@@ -192,8 +188,8 @@ else
   iptables -t mangle -D PREROUTING -i "${OVPN_DEV}" -p udp -j MARK --set-mark "${MARK}" 2>/dev/null || true
   iptables -t mangle -D PREROUTING -i "${OVPN_DEV}" -p tcp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}" 2>/dev/null || true
   iptables -t mangle -D PREROUTING -i "${OVPN_DEV}" -p udp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}" 2>/dev/null || true
-  iptables -t mangle -A PREROUTING -i "${OVPN_DEV}" -p tcp ! -d "${OVPN_CIDR}" ! --dport 53 -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}"
-  iptables -t mangle -A PREROUTING -i "${OVPN_DEV}" -p udp ! -d "${OVPN_CIDR}" ! --dport 53 -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}"
+  iptables -t mangle -A PREROUTING -i "${OVPN_DEV}" -p tcp ! -d "${OVPN_CIDR}" -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}"
+  iptables -t mangle -A PREROUTING -i "${OVPN_DEV}" -p udp ! -d "${OVPN_CIDR}" -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}"
 fi
 
 log "[7] configuring policy routing..."
