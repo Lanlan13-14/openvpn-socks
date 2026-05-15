@@ -168,7 +168,7 @@ docker run -d \
 
 ## DNS 远程解析
 
-默认 `OVPN_DNS=auto`，OpenVPN 会向客户端推送 OpenVPN 网段网关 `OVPN_SERVER_IP` 作为 DNS。来自 OpenVPN 设备的 TCP/UDP 流量，包括 53 端口 DNS，统一经 TPROXY 送入 sing-box；sing-box tproxy inbound 开启 `sniff`，识别 `protocol=dns` 后使用 `hijack-dns` 交给 DNS 模块，再通过新 DNS server 格式的 DoH 服务器 `DNS_SERVER` + `DNS_PATH` 发起远程解析。默认使用 `DNS_SERVER=1.1.1.1` 和 `DNS_TLS_SERVER_NAME=cloudflare-dns.com`，避免 DoH 服务器域名解析引导循环。默认 `DNS_DETOUR=proxy`，即 DNS 查询也走 SOCKS5；如需排查上游容量问题可临时设置 `DNS_DETOUR=direct`。
+默认 `OVPN_DNS=auto`，OpenVPN 会向客户端推送 OpenVPN 网段网关 `OVPN_SERVER_IP` 作为 DNS。容器内默认启用 dnsmasq 监听 `OVPN_SERVER_IP:53`，为客户端 DNS 提供缓存和合并转发，降低移动端高并发 DNS 查询直接打到 SOCKS5 UoT 的压力；dnsmasq 上游默认转发到 `127.0.0.1:${TPROXY_PORT}`，再进入 sing-box tproxy inbound。sing-box tproxy inbound 开启 `sniff`，识别 `protocol=dns` 后使用 `hijack-dns` 交给 DNS 模块，再通过新 DNS server 格式的 DoH 服务器 `DNS_SERVER` + `DNS_PATH` 发起远程解析。默认使用 `DNS_SERVER=1.1.1.1` 和 `DNS_TLS_SERVER_NAME=cloudflare-dns.com`，避免 DoH 服务器域名解析引导循环。默认 `DNS_DETOUR=proxy`，即 DNS 查询也走 SOCKS5；如需排查上游容量问题可临时设置 `DNS_DETOUR=direct`。
 
 可通过 `DNS_STRATEGY` 控制查询结果偏好：
 
@@ -197,6 +197,11 @@ docker run -d \
 | `DNS_STRATEGY` | `prefer_ipv4` | DNS 结果策略：`prefer_ipv4`、`prefer_ipv6`、`ipv4_only`、`ipv6_only` |
 | `DNS_LISTEN` | `127.0.0.1` | sing-box 本地 DNS 接收地址 |
 | `DNS_PORT` | `1053` | 保留变量，当前 DNS 通过 TPROXY/hijack-dns 处理 |
+| `DNSMASQ_ENABLED` | `1` | 启用 dnsmasq 作为客户端 DNS 缓存/转发层，减少客户端直接高并发打到 SOCKS5 UoT |
+| `DNSMASQ_PORT` | `53` | dnsmasq 监听端口 |
+| `DNSMASQ_UPSTREAM` | `127.0.0.1#7893` | dnsmasq 上游，默认转发到 sing-box tproxy 端口再由 hijack-dns 处理 |
+| `DNSMASQ_CACHE_SIZE` | `4096` | dnsmasq 缓存条目数 |
+| `DNSMASQ_LOG_QUERIES` | `0` | dnsmasq 查询日志开关 |
 | `ENABLE_DIAGNOSTICS` | `0` | 设置为 `1` 时启动时打印 sing-box 配置、ip rule、策略路由、iptables 规则，并用 curl 检测 SOCKS5/DoH 出站连通性 |
 | `PROXY_CHECK_URL` | `https://www.cloudflare.com/cdn-cgi/trace` | 诊断模式下用于测试 SOCKS5 TCP 出站的 URL |
 

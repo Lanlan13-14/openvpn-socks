@@ -10,6 +10,7 @@ RUN apk add --no-cache \
     iproute2 \
     nftables \
     iptables \
+    dnsmasq \
     openvpn \
     easy-rsa \
     gettext \
@@ -33,6 +34,7 @@ RUN set -eux; \
 COPY entrypoint.sh /entrypoint.sh
 COPY openvpn /openvpn-defaults
 COPY sing-box /sing-box
+COPY dnsmasq /dnsmasq
 COPY nft /nft
 
 RUN chmod +x /entrypoint.sh && mkdir -p /etc/openvpn /etc/sing-box /openvpn /env

@@ -80,13 +80,18 @@ load_env_file /env/runtime.env
 : "${DNS_TLS_SERVER_NAME:=cloudflare-dns.com}"
 : "${DNS_STRATEGY:=prefer_ipv4}"
 : "${DNS_DETOUR:=proxy}"
+: "${DNSMASQ_ENABLED:=1}"
+: "${DNSMASQ_PORT:=53}"
+: "${DNSMASQ_UPSTREAM:=127.0.0.1#${TPROXY_PORT}}"
+: "${DNSMASQ_CACHE_SIZE:=4096}"
+: "${DNSMASQ_LOG_QUERIES:=0}"
 : "${ENABLE_DIAGNOSTICS:=0}"
 : "${PROXY_CHECK_URL:=https://www.cloudflare.com/cdn-cgi/trace}"
 
 export OVPN_PROTO OVPN_PORT OVPN_DEV OVPN_DNS OVPN_NETWORK OVPN_NETMASK OVPN_CIDR OVPN_SERVER_IP OVPN_MAX_CLIENTS OVPN_DUPLICATE_CN OVPN_CLIENT_TO_CLIENT OVPN_CLIENT_NAME OVPN_SERVER_ADDR
 export OVPN_CIPHER OVPN_DATA_CIPHERS OVPN_AUTH OVPN_VERB OVPN_DUPLICATE_CN_CONFIG OVPN_CLIENT_TO_CLIENT_CONFIG
 export PROXY_HOST PROXY_PORT PROXY_USER PROXY_PASS PROXY_UDP
-export MARK TABLE_ID TPROXY_PORT FULL_PROXY TPROXY_BACKEND SING_BOX_LOG_LEVEL DNS_SERVER DNS_SERVER_PORT DNS_PATH DNS_TLS_SERVER_NAME DNS_STRATEGY DNS_DETOUR ENABLE_DIAGNOSTICS PROXY_CHECK_URL
+export MARK TABLE_ID TPROXY_PORT FULL_PROXY TPROXY_BACKEND SING_BOX_LOG_LEVEL DNS_SERVER DNS_SERVER_PORT DNS_PATH DNS_TLS_SERVER_NAME DNS_STRATEGY DNS_DETOUR DNSMASQ_ENABLED DNSMASQ_PORT DNSMASQ_UPSTREAM DNSMASQ_CACHE_SIZE DNSMASQ_LOG_QUERIES ENABLE_DIAGNOSTICS PROXY_CHECK_URL
 
 cleanup_legacy_rules
 
@@ -200,6 +205,9 @@ else
   envsubst < /sing-box/config.noauth.tpl.json > "$SING_BOX_CONF"
 fi
 envsubst < /nft/rules.nft.tpl > /tmp/rules.nft
+if [ "${DNSMASQ_ENABLED}" = "1" ] || [ "${DNSMASQ_ENABLED}" = "true" ]; then
+  envsubst < /dnsmasq/dnsmasq.conf.tpl > /tmp/dnsmasq.conf
+fi
 
 log "[4.1] generated sing-box config:"
 sed -E 's/("password"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"***"/; s/("username"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"***"/' "$SING_BOX_CONF" || true
@@ -219,6 +227,10 @@ else
   iptables -t mangle -F VPN_BOX_TPROXY
   iptables -t mangle -C PREROUTING -j VPN_BOX_TPROXY 2>/dev/null || iptables -t mangle -A PREROUTING -j VPN_BOX_TPROXY
   iptables -t mangle -A VPN_BOX_TPROXY -i "${OVPN_DEV}" -d "${OVPN_CIDR}" -j RETURN
+  if [ "${DNSMASQ_ENABLED}" = "1" ] || [ "${DNSMASQ_ENABLED}" = "true" ]; then
+    iptables -t mangle -A VPN_BOX_TPROXY -i "${OVPN_DEV}" -p tcp --dport "${DNSMASQ_PORT}" -j RETURN
+    iptables -t mangle -A VPN_BOX_TPROXY -i "${OVPN_DEV}" -p udp --dport "${DNSMASQ_PORT}" -j RETURN
+  fi
   iptables -t mangle -A VPN_BOX_TPROXY -i "${OVPN_DEV}" -p tcp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}"
   iptables -t mangle -A VPN_BOX_TPROXY -i "${OVPN_DEV}" -p udp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}"
 fi
@@ -240,6 +252,12 @@ log "[8] starting sing-box..."
 sing-box run -c "$SING_BOX_CONF" &
 SING_BOX_PID=$!
 
+if [ "${DNSMASQ_ENABLED}" = "1" ] || [ "${DNSMASQ_ENABLED}" = "true" ]; then
+  log "[8.1] starting dnsmasq..."
+  dnsmasq --no-daemon --conf-file=/tmp/dnsmasq.conf &
+  DNSMASQ_PID=$!
+fi
+
 if [ "${ENABLE_DIAGNOSTICS}" = "1" ] || [ "${ENABLE_DIAGNOSTICS}" = "true" ]; then
   (
     sleep 2
@@ -259,7 +277,7 @@ log "[9] starting openvpn..."
 openvpn --config "$SERVER_CONF" &
 OPENVPN_PID=$!
 
-wait -n "$SING_BOX_PID" "$OPENVPN_PID"
+wait -n "$SING_BOX_PID" "$OPENVPN_PID" ${DNSMASQ_PID:+"$DNSMASQ_PID"}
 log "one process exited, stopping container..."
-kill "$SING_BOX_PID" "$OPENVPN_PID" 2>/dev/null || true
+kill "$SING_BOX_PID" "$OPENVPN_PID" ${DNSMASQ_PID:+"$DNSMASQ_PID"} 2>/dev/null || true
 wait || true
