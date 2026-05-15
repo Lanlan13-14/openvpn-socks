@@ -14,6 +14,31 @@ load_env_file() {
   fi
 }
 
+cleanup_legacy_rules() {
+  log "[0] cleaning old vpn-box routing rules..."
+  while ip rule del fwmark "${MARK}" table "${TABLE_ID}" 2>/dev/null; do :; done
+  ip route flush table "${TABLE_ID}" 2>/dev/null || true
+
+  iptables -t mangle -D PREROUTING -j VPN_BOX_TPROXY 2>/dev/null || true
+  iptables -t mangle -F VPN_BOX_TPROXY 2>/dev/null || true
+  iptables -t mangle -X VPN_BOX_TPROXY 2>/dev/null || true
+
+  for dev in "${OVPN_DEV}" tun0 ovpn0; do
+    while iptables -t mangle -D PREROUTING -i "$dev" -p tcp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}" 2>/dev/null; do :; done
+    while iptables -t mangle -D PREROUTING -i "$dev" -p udp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}" 2>/dev/null; do :; done
+    while iptables -t mangle -D PREROUTING -i "$dev" -p tcp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}" 2>/dev/null; do :; done
+    while iptables -t mangle -D PREROUTING -i "$dev" -p udp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}" 2>/dev/null; do :; done
+    while iptables -t mangle -D PREROUTING -i "$dev" -p tcp ! -d "${OVPN_CIDR}" -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}" 2>/dev/null; do :; done
+    while iptables -t mangle -D PREROUTING -i "$dev" -p udp ! -d "${OVPN_CIDR}" -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}" 2>/dev/null; do :; done
+    while iptables -t mangle -D PREROUTING -i "$dev" -p tcp ! -d "${OVPN_CIDR}" -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}" 2>/dev/null; do :; done
+    while iptables -t mangle -D PREROUTING -i "$dev" -p udp ! -d "${OVPN_CIDR}" -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}" 2>/dev/null; do :; done
+    while iptables -t mangle -D PREROUTING -i "$dev" -p tcp ! -d "${OVPN_CIDR}" ! --dport 53 -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}" 2>/dev/null; do :; done
+    while iptables -t mangle -D PREROUTING -i "$dev" -p udp ! -d "${OVPN_CIDR}" ! --dport 53 -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}" 2>/dev/null; do :; done
+    while iptables -t nat -D PREROUTING -i "$dev" -p udp --dport 53 -j REDIRECT --to-ports 1053 2>/dev/null; do :; done
+    while iptables -t nat -D PREROUTING -i "$dev" -p tcp --dport 53 -j REDIRECT --to-ports 1053 2>/dev/null; do :; done
+  done
+}
+
 log "[1] loading env..."
 load_env_file /env/openvpn.env
 load_env_file /env/proxy.env
@@ -54,7 +79,7 @@ load_env_file /env/runtime.env
 : "${DNS_PATH:=/dns-query}"
 : "${DNS_TLS_SERVER_NAME:=cloudflare-dns.com}"
 : "${DNS_STRATEGY:=prefer_ipv4}"
-: "${DNS_DETOUR:=direct}"
+: "${DNS_DETOUR:=proxy}"
 : "${ENABLE_DIAGNOSTICS:=0}"
 : "${PROXY_CHECK_URL:=https://www.cloudflare.com/cdn-cgi/trace}"
 
@@ -62,6 +87,8 @@ export OVPN_PROTO OVPN_PORT OVPN_DEV OVPN_DNS OVPN_NETWORK OVPN_NETMASK OVPN_CID
 export OVPN_CIPHER OVPN_DATA_CIPHERS OVPN_AUTH OVPN_VERB OVPN_DUPLICATE_CN_CONFIG OVPN_CLIENT_TO_CLIENT_CONFIG
 export PROXY_HOST PROXY_PORT PROXY_USER PROXY_PASS PROXY_UDP
 export MARK TABLE_ID TPROXY_PORT FULL_PROXY TPROXY_BACKEND SING_BOX_LOG_LEVEL DNS_SERVER DNS_SERVER_PORT DNS_PATH DNS_TLS_SERVER_NAME DNS_STRATEGY DNS_DETOUR ENABLE_DIAGNOSTICS PROXY_CHECK_URL
+
+cleanup_legacy_rules
 
 if [ "${OVPN_DNS}" = "auto" ] || [ -z "${OVPN_DNS}" ]; then
   OVPN_DNS="${OVPN_SERVER_IP}"
@@ -188,21 +215,24 @@ if [ "${TPROXY_BACKEND}" = "nft" ]; then
     exit 1
   fi
 else
-  iptables -t mangle -D PREROUTING -i "${OVPN_DEV}" -p tcp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}" 2>/dev/null || true
-  iptables -t mangle -D PREROUTING -i "${OVPN_DEV}" -p udp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}" 2>/dev/null || true
-  iptables -t mangle -A PREROUTING -i "${OVPN_DEV}" -p tcp ! -d "${OVPN_CIDR}" -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}"
-  iptables -t mangle -A PREROUTING -i "${OVPN_DEV}" -p udp ! -d "${OVPN_CIDR}" -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}"
+  iptables -t mangle -N VPN_BOX_TPROXY 2>/dev/null || true
+  iptables -t mangle -F VPN_BOX_TPROXY
+  iptables -t mangle -C PREROUTING -j VPN_BOX_TPROXY 2>/dev/null || iptables -t mangle -A PREROUTING -j VPN_BOX_TPROXY
+  iptables -t mangle -A VPN_BOX_TPROXY -i "${OVPN_DEV}" -d "${OVPN_CIDR}" -j RETURN
+  iptables -t mangle -A VPN_BOX_TPROXY -i "${OVPN_DEV}" -p tcp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}"
+  iptables -t mangle -A VPN_BOX_TPROXY -i "${OVPN_DEV}" -p udp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}"
 fi
 
 log "[7] configuring policy routing..."
-ip rule del fwmark "${MARK}" table "${TABLE_ID}" 2>/dev/null || true
-ip rule add fwmark "${MARK}" table "${TABLE_ID}" 2>/dev/null || true
+while ip rule del fwmark "${MARK}" table "${TABLE_ID}" 2>/dev/null; do :; done
+ip rule add fwmark "${MARK}" table "${TABLE_ID}"
 ip route replace local 0.0.0.0/0 dev lo table "${TABLE_ID}"
 
 if [ "${ENABLE_DIAGNOSTICS}" = "1" ] || [ "${ENABLE_DIAGNOSTICS}" = "true" ]; then
   log "[diag] ip rule"; ip rule || true
   log "[diag] route table ${TABLE_ID}"; ip route show table "${TABLE_ID}" || true
   log "[diag] mangle PREROUTING"; iptables -t mangle -S PREROUTING || true
+  log "[diag] mangle VPN_BOX_TPROXY"; iptables -t mangle -S VPN_BOX_TPROXY || true
   log "[diag] nat PREROUTING"; iptables -t nat -S PREROUTING || true
 fi
 

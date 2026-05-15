@@ -32,7 +32,7 @@
       "listen": "0.0.0.0",
       "listen_port": ${TPROXY_PORT},
       "network": "tcp",
-      "sniff": false
+      "sniff": true
     },
     {
       "type": "tproxy",
@@ -40,10 +40,14 @@
       "listen": "0.0.0.0",
       "listen_port": ${TPROXY_PORT},
       "network": "udp",
-      "sniff": false
+      "sniff": true
     }
   ],
   "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    },
     {
       "type": "socks",
       "tag": "proxy",
@@ -56,9 +60,6 @@
   ],
   "route": {
     "rules": [
-      {
-        "action": "sniff"
-      },
       {
         "protocol": "dns",
         "action": "hijack-dns"

@@ -98,7 +98,7 @@ docker run -d \
   -e DNS_STRATEGY=prefer_ipv4 \
   -e DNS_SERVER=1.1.1.1 \
   -e DNS_TLS_SERVER_NAME=cloudflare-dns.com \
-  -e DNS_DETOUR=direct \
+  -e DNS_DETOUR=proxy \
   -e DNS_PATH=/dns-query \
   -e OVPN_DEV=ovpn0 \
   ghcr.io/lanlan13-14/ovpn-socks-out:latest
@@ -122,7 +122,7 @@ docker run -d \
   -e DNS_STRATEGY=prefer_ipv4 \
   -e DNS_SERVER=1.1.1.1 \
   -e DNS_TLS_SERVER_NAME=cloudflare-dns.com \
-  -e DNS_DETOUR=direct \
+  -e DNS_DETOUR=proxy \
   -e DNS_PATH=/dns-query \
   -e OVPN_DEV=ovpn0 \
   ghcr.io/lanlan13-14/ovpn-socks-out:latest
@@ -168,7 +168,7 @@ docker run -d \
 
 ## DNS 远程解析
 
-默认 `OVPN_DNS=auto`，OpenVPN 会向客户端推送 OpenVPN 网段网关 `OVPN_SERVER_IP` 作为 DNS。来自 OpenVPN 设备的 TCP/UDP 流量，包括 53 端口 DNS，统一经 TPROXY 送入 sing-box；sing-box 根据官方 1.12 迁移文档先执行 `sniff`，识别 `protocol=dns` 后使用 `hijack-dns` 交给 DNS 模块，再通过新 DNS server 格式的 DoH 服务器 `DNS_SERVER` + `DNS_PATH` 发起远程解析。默认使用 `DNS_SERVER=1.1.1.1` 和 `DNS_TLS_SERVER_NAME=cloudflare-dns.com`，避免 DoH 服务器域名解析引导循环。默认 `DNS_DETOUR=direct`，因为 VPN 客户端会产生大量并发 DNS 查询，如果每个 DNS 请求都经 SOCKS5 新建到 `1.1.1.1:443` 的 TCP 连接，容易触发上游 SOCKS5 超时；若你确认上游容量足够且必须让 DNS 出站也走 SOCKS5，可设置 `DNS_DETOUR=proxy`。
+默认 `OVPN_DNS=auto`，OpenVPN 会向客户端推送 OpenVPN 网段网关 `OVPN_SERVER_IP` 作为 DNS。来自 OpenVPN 设备的 TCP/UDP 流量，包括 53 端口 DNS，统一经 TPROXY 送入 sing-box；sing-box tproxy inbound 开启 `sniff`，识别 `protocol=dns` 后使用 `hijack-dns` 交给 DNS 模块，再通过新 DNS server 格式的 DoH 服务器 `DNS_SERVER` + `DNS_PATH` 发起远程解析。默认使用 `DNS_SERVER=1.1.1.1` 和 `DNS_TLS_SERVER_NAME=cloudflare-dns.com`，避免 DoH 服务器域名解析引导循环。默认 `DNS_DETOUR=proxy`，即 DNS 查询也走 SOCKS5；如需排查上游容量问题可临时设置 `DNS_DETOUR=direct`。
 
 可通过 `DNS_STRATEGY` 控制查询结果偏好：
 
@@ -193,7 +193,7 @@ docker run -d \
 | `DNS_SERVER_PORT` | `443` | 远程 DoH DNS 端口 |
 | `DNS_PATH` | `/dns-query` | 远程 DoH DNS 路径 |
 | `DNS_TLS_SERVER_NAME` | `cloudflare-dns.com` | DoH TLS SNI / 证书域名 |
-| `DNS_DETOUR` | `direct` | DNS 服务器连接方式：默认 `direct`，避免大量 DNS 查询占满/打爆 SOCKS5 上游；如必须让远程 DNS 也走 SOCKS5 可设为 `proxy` |
+| `DNS_DETOUR` | `proxy` | DNS 服务器连接方式：默认 `proxy`，即 DoH 查询也走 SOCKS5；可设为 `direct` 让 DoH 直连 |
 | `DNS_STRATEGY` | `prefer_ipv4` | DNS 结果策略：`prefer_ipv4`、`prefer_ipv6`、`ipv4_only`、`ipv6_only` |
 | `DNS_LISTEN` | `127.0.0.1` | sing-box 本地 DNS 接收地址 |
 | `DNS_PORT` | `1053` | 保留变量，当前 DNS 通过 TPROXY/hijack-dns 处理 |
