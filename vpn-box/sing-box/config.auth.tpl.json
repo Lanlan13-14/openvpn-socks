@@ -10,6 +10,9 @@
         "server": "${DNS_SERVER}",
         "server_port": ${DNS_SERVER_PORT},
         "path": "${DNS_PATH}",
+        "tls": {
+          "server_name": "${DNS_TLS_SERVER_NAME}"
+        },
         "detour": "proxy"
       }
     ],
@@ -26,15 +29,15 @@
     {
       "type": "direct",
       "tag": "dns-in-udp",
-      "listen": "${DNS_LISTEN}",
-      "listen_port": ${DNS_PORT},
+      "listen": "0.0.0.0",
+      "listen_port": 53,
       "network": "udp"
     },
     {
       "type": "direct",
       "tag": "dns-in-tcp",
-      "listen": "${DNS_LISTEN}",
-      "listen_port": ${DNS_PORT},
+      "listen": "0.0.0.0",
+      "listen_port": 53,
       "network": "tcp"
     },
     {

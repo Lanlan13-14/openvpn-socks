@@ -49,9 +49,10 @@ load_env_file /env/runtime.env
 : "${TPROXY_BACKEND:=iptables}"
 : "${FULL_PROXY:=1}"
 : "${SING_BOX_LOG_LEVEL:=warning}"
-: "${DNS_SERVER:=cloudflare-dns.com}"
+: "${DNS_SERVER:=1.1.1.1}"
 : "${DNS_SERVER_PORT:=443}"
 : "${DNS_PATH:=/dns-query}"
+: "${DNS_TLS_SERVER_NAME:=cloudflare-dns.com}"
 : "${DNS_STRATEGY:=prefer_ipv4}"
 : "${DNS_LISTEN:=127.0.0.1}"
 : "${DNS_PORT:=1053}"
@@ -59,7 +60,7 @@ load_env_file /env/runtime.env
 export OVPN_PROTO OVPN_PORT OVPN_DEV OVPN_DNS OVPN_NETWORK OVPN_NETMASK OVPN_CIDR OVPN_SERVER_IP OVPN_MAX_CLIENTS OVPN_DUPLICATE_CN OVPN_CLIENT_TO_CLIENT OVPN_CLIENT_NAME OVPN_SERVER_ADDR
 export OVPN_CIPHER OVPN_DATA_CIPHERS OVPN_AUTH OVPN_VERB OVPN_DUPLICATE_CN_CONFIG OVPN_CLIENT_TO_CLIENT_CONFIG
 export PROXY_HOST PROXY_PORT PROXY_USER PROXY_PASS PROXY_UDP
-export MARK TABLE_ID TPROXY_PORT FULL_PROXY TPROXY_BACKEND SING_BOX_LOG_LEVEL DNS_SERVER DNS_SERVER_PORT DNS_PATH DNS_STRATEGY DNS_LISTEN DNS_PORT
+export MARK TABLE_ID TPROXY_PORT FULL_PROXY TPROXY_BACKEND SING_BOX_LOG_LEVEL DNS_SERVER DNS_SERVER_PORT DNS_PATH DNS_TLS_SERVER_NAME DNS_STRATEGY DNS_LISTEN DNS_PORT
 
 if [ "${OVPN_DNS}" = "auto" ] || [ -z "${OVPN_DNS}" ]; then
   OVPN_DNS="${OVPN_SERVER_IP}"
@@ -177,8 +178,8 @@ sysctl -w net.ipv4.ip_forward=1 >/dev/null || true
 sysctl -w net.ipv4.conf.all.route_localnet=1 >/dev/null || true
 iptables -t nat -D PREROUTING -i "${OVPN_DEV}" -p udp --dport 53 -j REDIRECT --to-ports "${DNS_PORT}" 2>/dev/null || true
 iptables -t nat -D PREROUTING -i "${OVPN_DEV}" -p tcp --dport 53 -j REDIRECT --to-ports "${DNS_PORT}" 2>/dev/null || true
-iptables -t nat -A PREROUTING -i "${OVPN_DEV}" -p udp --dport 53 -j REDIRECT --to-ports "${DNS_PORT}"
-iptables -t nat -A PREROUTING -i "${OVPN_DEV}" -p tcp --dport 53 -j REDIRECT --to-ports "${DNS_PORT}"
+iptables -t nat -D PREROUTING -i "${OVPN_DEV}" -p udp --dport 53 -j REDIRECT --to-ports 53 2>/dev/null || true
+iptables -t nat -D PREROUTING -i "${OVPN_DEV}" -p tcp --dport 53 -j REDIRECT --to-ports 53 2>/dev/null || true
 
 log "[6] loading transparent proxy rules..."
 if [ "${TPROXY_BACKEND}" = "nft" ]; then

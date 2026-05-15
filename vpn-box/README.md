@@ -96,7 +96,8 @@ docker run -d \
   -e PROXY_PORT=1080 \
   -e PROXY_UDP=true \
   -e DNS_STRATEGY=prefer_ipv4 \
-  -e DNS_SERVER=cloudflare-dns.com \
+  -e DNS_SERVER=1.1.1.1 \
+  -e DNS_TLS_SERVER_NAME=cloudflare-dns.com \
   -e DNS_PATH=/dns-query \
   -e OVPN_DEV=ovpn0 \
   ghcr.io/lanlan13-14/ovpn-socks-out:latest
@@ -118,7 +119,8 @@ docker run -d \
   -e PROXY_PASS=pass \
   -e PROXY_UDP=true \
   -e DNS_STRATEGY=prefer_ipv4 \
-  -e DNS_SERVER=cloudflare-dns.com \
+  -e DNS_SERVER=1.1.1.1 \
+  -e DNS_TLS_SERVER_NAME=cloudflare-dns.com \
   -e DNS_PATH=/dns-query \
   -e OVPN_DEV=ovpn0 \
   ghcr.io/lanlan13-14/ovpn-socks-out:latest
@@ -164,7 +166,7 @@ docker run -d \
 
 ## DNS 远程解析
 
-默认 `OVPN_DNS=auto`，OpenVPN 会向客户端推送 OpenVPN 网段网关 `OVPN_SERVER_IP` 作为 DNS。容器内将来自 `OVPN_DEV` 的 TCP/UDP 53 端口请求重定向到 sing-box 本地 DNS inbound，再由 sing-box 使用新 DNS server 格式的 DoH 服务器 `DNS_SERVER` + `DNS_PATH`，并通过 `proxy` SOCKS5 outbound 发起远程解析。
+默认 `OVPN_DNS=auto`，OpenVPN 会向客户端推送 OpenVPN 网段网关 `OVPN_SERVER_IP` 作为 DNS。sing-box 直接监听容器网络命名空间的 `0.0.0.0:53`，接收来自 OpenVPN 客户端的 TCP/UDP DNS 请求，然后使用新 DNS server 格式的 DoH 服务器 `DNS_SERVER` + `DNS_PATH`，并通过 `proxy` SOCKS5 outbound 发起远程解析。默认使用 `DNS_SERVER=1.1.1.1` 和 `DNS_TLS_SERVER_NAME=cloudflare-dns.com`，避免 DoH 服务器域名解析引导循环。
 
 可通过 `DNS_STRATEGY` 控制查询结果偏好：
 
@@ -185,9 +187,10 @@ docker run -d \
 | `TPROXY_BACKEND` | `iptables` | 透明代理规则后端：默认 `iptables`，可改为 `nft` |
 | `FULL_PROXY` | `1` | 保留变量，默认全代理 |
 | `SING_BOX_LOG_LEVEL` | `warning` | sing-box 日志级别 |
-| `DNS_SERVER` | `cloudflare-dns.com` | 远程 DoH DNS 服务器域名，sing-box 通过 SOCKS5 outbound 查询 |
+| `DNS_SERVER` | `1.1.1.1` | 远程 DoH DNS 服务器地址；默认用 Cloudflare IP，避免解析 DoH 域名时发生引导循环 |
 | `DNS_SERVER_PORT` | `443` | 远程 DoH DNS 端口 |
 | `DNS_PATH` | `/dns-query` | 远程 DoH DNS 路径 |
+| `DNS_TLS_SERVER_NAME` | `cloudflare-dns.com` | DoH TLS SNI / 证书域名 |
 | `DNS_STRATEGY` | `prefer_ipv4` | DNS 结果策略：`prefer_ipv4`、`prefer_ipv6`、`ipv4_only`、`ipv6_only` |
 | `DNS_LISTEN` | `127.0.0.1` | sing-box 本地 DNS 接收地址 |
 | `DNS_PORT` | `1053` | sing-box 本地 DNS 接收端口 |
