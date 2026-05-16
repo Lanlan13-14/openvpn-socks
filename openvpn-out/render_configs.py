@@ -168,7 +168,17 @@ def build_config():
             build_proxy_outbound(),
         ],
         'route': {
-            'rules': [{'protocol': 'dns', 'action': 'hijack-dns'}],
+            'rules': [
+                {
+                    'ip_cidr': [f"{env('SING_TUN_DNS_ADDRESS', '172.19.0.2')}/32"],
+                    'port': 53,
+                    'action': 'hijack-dns',
+                },
+                {
+                    'protocol': 'dns',
+                    'action': 'hijack-dns',
+                },
+            ],
             'final': 'proxy',
             'auto_detect_interface': True,
         },

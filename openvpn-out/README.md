@@ -21,7 +21,7 @@ OpenVPN client DNS
   -> OpenVPN gateway 10.8.0.1:53
   -> dnsmasq cache
   -> sing-box TUN DNS address 172.19.0.2:53
-  -> sing-box DNS hijack
+  -> sing-box DNS hijack (explicit 172.19.0.2:53 rule)
   -> Remote DNS (DoH / DoT / plain DNS)
   -> SOCKS5 outbound
 ```
