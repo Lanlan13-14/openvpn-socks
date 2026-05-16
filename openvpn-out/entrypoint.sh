@@ -9,7 +9,7 @@ load_env_file() {
   local file="$1"
   if [ -f "$file" ]; then
     set -a
-    source "$file"
+    . "$file"
     set +a
   fi
 }
@@ -44,12 +44,10 @@ wait_ipv4() {
 }
 
 cleanup_legacy_rules() {
-  log "[0] cleaning old vpn-box routing rules..."
-
+  log "[0] cleaning old vpn-box/openvpn-out routing rules..."
   while ip rule del fwmark "${MARK}" table "${TABLE_ID}" 2>/dev/null; do :; done
   while ip rule del from "${OVPN_CIDR}" table "${TABLE_ID}" 2>/dev/null; do :; done
   ip route flush table "${TABLE_ID}" 2>/dev/null || true
-
   iptables -t mangle -D PREROUTING -j VPN_BOX_TPROXY 2>/dev/null || true
   iptables -t mangle -F VPN_BOX_TPROXY 2>/dev/null || true
   iptables -t mangle -X VPN_BOX_TPROXY 2>/dev/null || true
@@ -92,11 +90,17 @@ load_env_file /env/runtime.env
 : "${OVPN_VERB:=3}"
 : "${OVPN_PRESERVE_TEMPLATE:=0}"
 
+: "${PROXY_TYPE:=socks}"
 : "${PROXY_HOST:?missing PROXY_HOST}"
 : "${PROXY_PORT:?missing PROXY_PORT}"
 : "${PROXY_USER:=}"
 : "${PROXY_PASS:=}"
+: "${PROXY_PASSWORD:=${PROXY_PASS}}"
+: "${PROXY_METHOD:=2022-blake3-aes-128-gcm}"
 : "${PROXY_UDP:=true}"
+: "${PROXY_TLS_SERVER_NAME:=}"
+: "${PROXY_TLS_INSECURE:=0}"
+: "${PROXY_TLS_ALPN:=}"
 
 : "${TABLE_ID:=100}"
 : "${TABLE_PRIORITY:=10000}"
@@ -110,10 +114,13 @@ load_env_file /env/runtime.env
 : "${SING_TUN_DNS_ADDRESS:=172.19.0.2}"
 : "${SING_TUN_MTU:=1500}"
 : "${SING_TUN_STACK:=mixed}"
+: "${DNS_SERVER_TYPE:=https}"
 : "${DNS_SERVER:=1.1.1.1}"
 : "${DNS_SERVER_PORT:=443}"
 : "${DNS_PATH:=/dns-query}"
 : "${DNS_TLS_SERVER_NAME:=cloudflare-dns.com}"
+: "${DNS_TLS_INSECURE:=0}"
+: "${DNS_TLS_ALPN:=}"
 : "${DNS_STRATEGY:=prefer_ipv4}"
 : "${DNS_DETOUR:=proxy}"
 : "${DNSMASQ_ENABLED:=1}"
@@ -133,10 +140,10 @@ if [ "${OVPN_DNS}" = "auto" ] || [ -z "${OVPN_DNS}" ]; then
 fi
 
 export OVPN_PROTO OVPN_PORT OVPN_DEV OVPN_DNS OVPN_NETWORK OVPN_NETMASK OVPN_CIDR OVPN_SERVER_IP OVPN_MAX_CLIENTS OVPN_DUPLICATE_CN OVPN_CLIENT_TO_CLIENT OVPN_CLIENT_NAME OVPN_SERVER_ADDR
-export OVPN_CIPHER OVPN_DATA_CIPHERS OVPN_AUTH OVPN_VERB OVPN_DUPLICATE_CN_CONFIG OVPN_CLIENT_TO_CLIENT_CONFIG
-export PROXY_HOST PROXY_PORT PROXY_USER PROXY_PASS PROXY_UDP
+export OVPN_CIPHER OVPN_DATA_CIPHERS OVPN_AUTH OVPN_VERB OVPN_DUPLICATE_CN_CONFIG OVPN_CLIENT_TO_CLIENT_CONFIG OVPN_PRESERVE_TEMPLATE
+export PROXY_TYPE PROXY_HOST PROXY_PORT PROXY_USER PROXY_PASS PROXY_PASSWORD PROXY_METHOD PROXY_UDP PROXY_TLS_SERVER_NAME PROXY_TLS_INSECURE PROXY_TLS_ALPN
 export TABLE_ID TABLE_PRIORITY MARK TPROXY_PORT TPROXY_BACKEND FULL_PROXY SING_BOX_LOG_LEVEL SING_TUN_NAME SING_TUN_ADDRESS SING_TUN_DNS_ADDRESS SING_TUN_MTU SING_TUN_STACK
-export DNS_SERVER DNS_SERVER_PORT DNS_PATH DNS_TLS_SERVER_NAME DNS_STRATEGY DNS_DETOUR DNSMASQ_ENABLED DNSMASQ_PORT DNSMASQ_UPSTREAM DNSMASQ_CACHE_SIZE DNSMASQ_LOG_QUERIES ENABLE_DIAGNOSTICS PROXY_CHECK_URL
+export DNS_SERVER_TYPE DNS_SERVER DNS_SERVER_PORT DNS_PATH DNS_TLS_SERVER_NAME DNS_TLS_INSECURE DNS_TLS_ALPN DNS_STRATEGY DNS_DETOUR DNSMASQ_ENABLED DNSMASQ_PORT DNSMASQ_UPSTREAM DNSMASQ_CACHE_SIZE DNSMASQ_LOG_QUERIES ENABLE_DIAGNOSTICS PROXY_CHECK_URL
 
 cleanup_legacy_rules
 
@@ -174,7 +181,7 @@ make_pki() {
   fi
   mkdir -p "$PKI_DIR"
   EASYRSA_PKI="$PKI_DIR" "$easyrsa_bin" --batch init-pki
-  EASYRSA_PKI="$PKI_DIR" EASYRSA_REQ_CN="vpn-box-ca" "$easyrsa_bin" --batch build-ca nopass
+  EASYRSA_PKI="$PKI_DIR" EASYRSA_REQ_CN="openvpn-out-ca" "$easyrsa_bin" --batch build-ca nopass
   EASYRSA_PKI="$PKI_DIR" "$easyrsa_bin" --batch build-server-full server nopass
   EASYRSA_PKI="$PKI_DIR" "$easyrsa_bin" --batch build-client-full "${OVPN_CLIENT_NAME}" nopass
   openvpn --genkey secret "$PKI_DIR/ta.key"
@@ -241,18 +248,13 @@ fi
 make_client_profile "$OVPN_CLIENT_NAME"
 
 log "[4] generating runtime configs..."
-envsubst < "${OPENVPN_DIR}/server.conf.tpl" > "$SERVER_CONF"
-if [ -n "$PROXY_USER" ] || [ -n "$PROXY_PASS" ]; then
-  envsubst < /sing-box/config.auth.tpl.json > "$SING_BOX_CONF"
-else
-  envsubst < /sing-box/config.noauth.tpl.json > "$SING_BOX_CONF"
-fi
+python3 /render_configs.py "$SING_BOX_CONF"
 if [ "${DNSMASQ_ENABLED}" = "1" ] || [ "${DNSMASQ_ENABLED}" = "true" ]; then
   envsubst < /dnsmasq/dnsmasq.conf.tpl > /tmp/dnsmasq.conf
 fi
 
-log "[4.1] generated sing-box config:"
-sed -E 's/("password"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"***"/; s/("username"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"***"/' "$SING_BOX_CONF" || true
+echo "[4.1] generated sing-box config:" \
+  && sed -E 's/("password"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"***"/; s/("username"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"***"/' "$SING_BOX_CONF" || true
 
 log "[5] enabling kernel forwarding..."
 sysctl -w net.ipv4.ip_forward=1 >/dev/null || log "warning: failed to set net.ipv4.ip_forward; make sure host enables IPv4 forwarding"
@@ -298,15 +300,17 @@ if [ "${ENABLE_DIAGNOSTICS}" = "1" ] || [ "${ENABLE_DIAGNOSTICS}" = "true" ]; th
   [ -f /tmp/dnsmasq.conf ] && { log "[diag] dnsmasq config"; cat /tmp/dnsmasq.conf; }
   (
     sleep 2
-    log "[diag] checking SOCKS5 outbound via curl..."
-    curl -fsS --connect-timeout 5 --max-time 12 \
-      --socks5-hostname "${PROXY_USER:+${PROXY_USER}:${PROXY_PASS}@}${PROXY_HOST}:${PROXY_PORT}" \
-      "${PROXY_CHECK_URL}" || log "[diag] SOCKS5 outbound check failed"
-    log "[diag] checking DoH via SOCKS5 outbound..."
-    curl -fsS --connect-timeout 5 --max-time 12 \
-      --socks5-hostname "${PROXY_USER:+${PROXY_USER}:${PROXY_PASS}@}${PROXY_HOST}:${PROXY_PORT}" \
-      -H 'accept: application/dns-json' \
-      "https://${DNS_TLS_SERVER_NAME}${DNS_PATH}?name=example.com&type=A" || log "[diag] DoH over SOCKS5 check failed"
+    log "[diag] checking outbound via curl..."
+    case "${PROXY_TYPE}" in
+      anytls)
+        curl -fsS --connect-timeout 5 --max-time 12 --anyauth "${PROXY_CHECK_URL}" || true
+        ;;
+      *)
+        curl -fsS --connect-timeout 5 --max-time 12 \
+          --socks5-hostname "${PROXY_USER:+${PROXY_USER}:${PROXY_PASS}@}${PROXY_HOST}:${PROXY_PORT}" \
+          "${PROXY_CHECK_URL}" || log "[diag] SOCKS5 outbound check failed"
+        ;;
+    esac
     if [ "${DNSMASQ_ENABLED}" = "1" ] || [ "${DNSMASQ_ENABLED}" = "true" ]; then
       log "[diag] checking dnsmasq query..."
       nslookup example.com "${OVPN_SERVER_IP}" || log "[diag] dnsmasq query failed"

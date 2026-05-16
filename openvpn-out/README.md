@@ -1,8 +1,8 @@
-# ovpn-socks-out
+# openvpn-out
 
 单容器 OpenVPN Server + sing-box TUN + SOCKS5 outbound 镜像。
 
-镜像名：`ghcr.io/lanlan13-14/ovpn-socks-out`
+镜像名：`ghcr.io/lanlan13-14/openvpn-out`
 
 ## 架构
 
@@ -11,7 +11,7 @@ OpenVPN client
   -> OpenVPN Server inside container, interface ovpn0
   -> policy route from OpenVPN CIDR
   -> sing-box TUN interface sb-tun0
-  -> SOCKS5 outbound
+  -> anytls / shadowsocks 2022 / SOCKS5 outbound
 ```
 
 DNS 默认链路：
@@ -22,16 +22,16 @@ OpenVPN client DNS
   -> dnsmasq cache
   -> sing-box TUN DNS address 172.19.0.2:53
   -> sing-box DNS hijack
-  -> Cloudflare DoH
+  -> Remote DNS (DoH / DoT / plain DNS)
   -> SOCKS5 outbound
 ```
 
-本镜像不再默认使用 TPROXY/nft 作为 datapath。
+本镜像默认使用 sing-box TUN 作为 datapath，支持普通 DNS、DoH、DoT、DoQ 等远程 DNS 形态。
 
 ## 使用
 
 ```bash
-cd vpn-box
+cd openvpn-out
 docker compose up -d --build
 ```
 
@@ -60,7 +60,7 @@ openvpn/
 
 ```bash
 docker run -d \
-  --name ovpn-socks-out \
+  --name openvpn-out \
   --network host \
   --cap-add NET_ADMIN \
   --cap-add SYS_MODULE \
@@ -85,7 +85,7 @@ docker run -d \
   -e DNSMASQ_ENABLED=1 \
   -e SING_BOX_LOG_LEVEL=warning \
   --restart unless-stopped \
-  ghcr.io/lanlan13-14/ovpn-socks-out:latest
+  ghcr.io/lanlan13-14/openvpn-out:latest
 ```
 
 无认证 SOCKS5 时去掉 `PROXY_USER` / `PROXY_PASS`。
@@ -122,6 +122,12 @@ docker run -d \
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `TPROXY_BACKEND` | `tun` | 保留兼容变量；当前默认 datapath 为 sing-box TUN |
+| `PROXY_TYPE` | `socks` | 上游出站类型：`socks`、`anytls`、`shadowsocks` |
+| `PROXY_PASSWORD` | 空 | AnyTLS / Shadowsocks 2022 密码 |
+| `PROXY_METHOD` | `2022-blake3-aes-128-gcm` | Shadowsocks 加密方法 |
+| `PROXY_TLS_SERVER_NAME` | 空 | AnyTLS TLS SNI |
+| `PROXY_TLS_INSECURE` | `0` | AnyTLS 是否忽略证书校验 |
+| `PROXY_TLS_ALPN` | 空 | AnyTLS TLS ALPN，逗号分隔 |
 | `TABLE_ID` | `100` | OpenVPN CIDR 策略路由表 |
 | `TABLE_PRIORITY` | `10000` | 策略路由优先级 |
 | `SING_TUN_NAME` | `sb-tun0` | sing-box TUN 接口名 |
@@ -144,11 +150,12 @@ docker run -d \
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `DNS_SERVER` | `1.1.1.1` | 远程 DoH DNS 服务器地址 |
-| `DNS_SERVER_PORT` | `443` | 远程 DoH DNS 端口 |
-| `DNS_PATH` | `/dns-query` | 远程 DoH DNS 路径 |
-| `DNS_TLS_SERVER_NAME` | `cloudflare-dns.com` | DoH TLS SNI / 证书域名 |
-| `DNS_DETOUR` | `proxy` | DoH 查询出站：`proxy` 走 SOCKS5，`direct` 直连 |
+| `DNS_SERVER_TYPE` | `https` | 远程 DNS 服务器类型：`udp`、`tcp`、`tls`、`quic`、`https`、`h3` |
+| `DNS_SERVER` | `1.1.1.1` | 远程 DNS 服务器地址 |
+| `DNS_SERVER_PORT` | `443` | 远程 DNS 端口；普通 DNS 一般为 `53`，DoT/DoQ 常用 `853` |
+| `DNS_PATH` | `/dns-query` | 远程 HTTPS/H3 DNS 路径 |
+| `DNS_TLS_SERVER_NAME` | `cloudflare-dns.com` | TLS 相关 DNS 的 SNI / 证书域名 |
+| `DNS_DETOUR` | `proxy` | DNS 查询出站：`proxy` 走上游，`direct` 直连 |
 | `DNS_STRATEGY` | `prefer_ipv4` | `prefer_ipv4`、`prefer_ipv6`、`ipv4_only`、`ipv6_only` |
 | `DNSMASQ_ENABLED` | `1` | 启用 dnsmasq 作为客户端 DNS 缓存层 |
 | `DNSMASQ_PORT` | `53` | dnsmasq 监听端口 |
@@ -164,7 +171,35 @@ docker run -d \
 | `ENABLE_DIAGNOSTICS` | `0` | 设为 `1` 打印 sing-box 配置、接口、策略路由、iptables 规则并做 SOCKS/DoH 检测 |
 | `PROXY_CHECK_URL` | `https://www.cloudflare.com/cdn-cgi/trace` | 诊断模式下测试 SOCKS5 TCP 出站的 URL |
 
-## OpenVPN DCO
+## br-lan 模式（OpenWrt / 路由器场景）
+
+如果你的宿主机是 OpenWrt，或者希望服务直接跑在 `br-lan` 上，可以按下面方式使用：
+
+1. 保持 `network_mode: host`，不要改成 bridge 模式。
+2. 把 `OVPN_SERVER_ADDR` 设置为 `br-lan` 对应的 LAN IPv4 地址。
+3. 确保路由器防火墙允许 `OVPN_PORT` 从 LAN 侧入站。
+4. 如果宿主机本身就是网关，`dnsmasq` 仍然可以正常做客户端 DNS 缓存层。
+5. 其他 OpenVPN / sing-box 环境变量保持不变。
+
+示例：
+
+```bash
+docker run -d \
+  --name openvpn-out \
+  --network host \
+  --cap-add NET_ADMIN \
+  --cap-add SYS_MODULE \
+  --device /dev/net/tun \
+  -v /root/openvpn-out:/openvpn \
+  -e OVPN_SERVER_ADDR=192.168.1.1 \
+  -e OVPN_PORT=1194 \
+  -e PROXY_TYPE=shadowsocks \
+  -e PROXY_HOST=127.0.0.1 \
+  -e PROXY_PORT=8388 \
+  -e PROXY_METHOD=2022-blake3-aes-128-gcm \
+  -e PROXY_PASSWORD='your-password' \
+  ghcr.io/lanlan13-14/openvpn-out:latest
+```
 
 OpenVPN 2.6 会在配置和宿主机内核支持时机会性使用 DCO。DCO 需要宿主机支持并加载 `ovpn-dco` 内核模块。
 

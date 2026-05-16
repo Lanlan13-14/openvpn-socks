@@ -1,4 +1,4 @@
-name: Build VPN Box Docker Image to GHCR
+name: Build OpenVPN Out Docker Image to GHCR
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
       tag:
         description: '镜像 tag'
         required: true
-        default: 'vpn-box-v1.0.0'
+        default: 'v1.0.0'
       sing_box_version:
         description: 'sing-box 固定版本'
         required: true
@@ -34,8 +34,8 @@ jobs:
           VERSION_TAG=${{ github.event.inputs.tag }}
           echo "VERSION_TAG=${VERSION_TAG}" >> $GITHUB_ENV
           echo "SING_BOX_VERSION=${{ github.event.inputs.sing_box_version }}" >> $GITHUB_ENV
-          echo "IMAGE_TAG=ghcr.io/${OWNER_LOWER}/ovpn-socks-out:${VERSION_TAG}" >> $GITHUB_ENV
-          echo "IMAGE_LATEST=ghcr.io/${OWNER_LOWER}/ovpn-socks-out:latest" >> $GITHUB_ENV
+          echo "IMAGE_TAG=ghcr.io/${OWNER_LOWER}/openvpn-out:${VERSION_TAG}" >> $GITHUB_ENV
+          echo "IMAGE_LATEST=ghcr.io/${OWNER_LOWER}/openvpn-out:latest" >> $GITHUB_ENV
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -50,7 +50,7 @@ jobs:
             --build-arg SING_BOX_VERSION=$SING_BOX_VERSION \
             -t $IMAGE_TAG \
             -t $IMAGE_LATEST \
-            ./vpn-box
+            ./openvpn-out
 
       - name: Push Docker image
         run: |
@@ -82,5 +82,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.VERSION_TAG }}
-          name: ovpn-socks-out Release ${{ env.VERSION_TAG }}
+          name: openvpn-out Release ${{ env.VERSION_TAG }}
           body: ${{ env.CHANGELOG }}

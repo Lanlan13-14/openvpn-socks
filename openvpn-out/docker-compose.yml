@@ -1,13 +1,13 @@
 version: "3.9"
 
 services:
-  vpn-box:
+  openvpn-out:
     build:
       context: .
       args:
         SING_BOX_VERSION: "1.12.0"
-    image: vpn-box:local
-    container_name: vpn-box
+    image: openvpn-out:local
+    container_name: openvpn-out
     network_mode: host
     cap_add:
       - NET_ADMIN

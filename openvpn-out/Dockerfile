@@ -15,7 +15,8 @@ RUN apk add --no-cache \
     easy-rsa \
     gettext \
     openssl \
-    tar
+    tar \
+    python3
 
 RUN set -eux; \
     case "${TARGETARCH}" in \
@@ -32,11 +33,12 @@ RUN set -eux; \
     rm -rf /tmp/sing-box /tmp/sing-box.tar.gz
 
 COPY entrypoint.sh /entrypoint.sh
+COPY render_configs.py /render_configs.py
 COPY openvpn /openvpn-defaults
 COPY sing-box /sing-box
 COPY dnsmasq /dnsmasq
 COPY nft /nft
 
-RUN chmod +x /entrypoint.sh && mkdir -p /etc/openvpn /etc/sing-box /openvpn /env
+RUN chmod +x /entrypoint.sh /render_configs.py && mkdir -p /etc/openvpn /etc/sing-box /openvpn /env
 
 ENTRYPOINT ["/entrypoint.sh"]
