@@ -90,7 +90,91 @@ docker run -d \
 
 无认证 SOCKS5 时去掉 `PROXY_USER` / `PROXY_PASS`。
 
-## 环境变量
+### 1. 普通 SOCKS
+
+```bash
+docker run -d \
+  --name openvpn-out \
+  --network host \
+  --cap-add NET_ADMIN \
+  --cap-add SYS_MODULE \
+  --device /dev/net/tun \
+  -v /root/openvpn-out:/openvpn \
+  -e OVPN_SERVER_ADDR=139.162.1.152 \
+  -e OVPN_PORT=1194 \
+  -e PROXY_TYPE=socks \
+  -e PROXY_HOST=116.251.216.36 \
+  -e PROXY_PORT=12240 \
+  -e PROXY_USER='user' \
+  -e PROXY_PASS='pass' \
+  -e PROXY_UDP=true \
+  ghcr.io/lanlan13-14/openvpn-out:latest
+```
+
+### 2. 普通 SS + UoT
+
+```bash
+docker run -d \
+  --name openvpn-out \
+  --network host \
+  --cap-add NET_ADMIN \
+  --cap-add SYS_MODULE \
+  --device /dev/net/tun \
+  -v /root/openvpn-out:/openvpn \
+  -e OVPN_SERVER_ADDR=139.162.1.152 \
+  -e OVPN_PORT=1194 \
+  -e PROXY_TYPE=shadowsocks \
+  -e PROXY_HOST=116.251.216.36 \
+  -e PROXY_PORT=8388 \
+  -e PROXY_METHOD=aes-128-gcm \
+  -e PROXY_PASSWORD='ss-password' \
+  -e PROXY_UOT=1 \
+  -e PROXY_UOT_VERSION=2 \
+  ghcr.io/lanlan13-14/openvpn-out:latest
+```
+
+### 3. SS2022 / AnyTLS 示例
+
+SS2022：
+
+```bash
+docker run -d \
+  --name openvpn-out \
+  --network host \
+  --cap-add NET_ADMIN \
+  --cap-add SYS_MODULE \
+  --device /dev/net/tun \
+  -v /root/openvpn-out:/openvpn \
+  -e OVPN_SERVER_ADDR=139.162.1.152 \
+  -e OVPN_PORT=1194 \
+  -e PROXY_TYPE=ss2022 \
+  -e PROXY_HOST=116.251.216.36 \
+  -e PROXY_PORT=8388 \
+  -e PROXY_METHOD=2022-blake3-aes-128-gcm \
+  -e PROXY_PASSWORD='ss2022-password' \
+  ghcr.io/lanlan13-14/openvpn-out:latest
+```
+
+AnyTLS：
+
+```bash
+docker run -d \
+  --name openvpn-out \
+  --network host \
+  --cap-add NET_ADMIN \
+  --cap-add SYS_MODULE \
+  --device /dev/net/tun \
+  -v /root/openvpn-out:/openvpn \
+  -e OVPN_SERVER_ADDR=139.162.1.152 \
+  -e OVPN_PORT=1194 \
+  -e PROXY_TYPE=anytls \
+  -e PROXY_HOST=116.251.216.36 \
+  -e PROXY_PORT=443 \
+  -e PROXY_PASSWORD='anytls-password' \
+  -e PROXY_TLS_SERVER_NAME=example.com \
+  ghcr.io/lanlan13-14/openvpn-out:latest
+```
+
 
 所有变量既可以写入 `env/*.env`，也可以通过 `docker run -e` 或 Compose `environment` 直接定义。
 
