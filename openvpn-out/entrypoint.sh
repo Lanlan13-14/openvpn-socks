@@ -256,10 +256,15 @@ fi
 echo "[4.1] generated sing-box config:" \
   && sed -E 's/("password"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"***"/; s/("username"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"***"/' "$SING_BOX_CONF" || true
 
-log "[5] enabling kernel forwarding..."
+log "[5] generating OpenVPN server config..."
+envsubst < "${OPENVPN_DIR}/server.conf.tpl" > "$SERVER_CONF"
+log "[5.1] generated OpenVPN server config:"
+sed 's/^/  /' "$SERVER_CONF" || true
+
+log "[6] enabling kernel forwarding..."
 sysctl -w net.ipv4.ip_forward=1 >/dev/null || log "warning: failed to set net.ipv4.ip_forward; make sure host enables IPv4 forwarding"
 
-log "[6] starting sing-box TUN..."
+log "[7] starting sing-box TUN..."
 sing-box run -c "$SING_BOX_CONF" &
 SING_BOX_PID=$!
 if ! wait_interface "$SING_TUN_NAME" 20; then
@@ -267,7 +272,7 @@ if ! wait_interface "$SING_TUN_NAME" 20; then
   exit 1
 fi
 
-log "[7] starting openvpn..."
+log "[8] starting openvpn..."
 openvpn --config "$SERVER_CONF" &
 OPENVPN_PID=$!
 if ! wait_ipv4 "$OVPN_DEV" "$OVPN_SERVER_IP" 30; then
@@ -275,7 +280,7 @@ if ! wait_ipv4 "$OVPN_DEV" "$OVPN_SERVER_IP" 30; then
   exit 1
 fi
 
-log "[8] configuring OpenVPN client policy route to sing-box TUN..."
+log "[9] configuring OpenVPN client policy route to sing-box TUN..."
 while ip rule del from "${OVPN_CIDR}" table "${TABLE_ID}" 2>/dev/null; do :; done
 ip route flush table "${TABLE_ID}" 2>/dev/null || true
 ip route replace "${OVPN_CIDR}" dev "${OVPN_DEV}" table "${TABLE_ID}"
@@ -284,7 +289,7 @@ ip rule add from "${OVPN_CIDR}" table "${TABLE_ID}" priority "${TABLE_PRIORITY}"
 
 DNSMASQ_PID=""
 if [ "${DNSMASQ_ENABLED}" = "1" ] || [ "${DNSMASQ_ENABLED}" = "true" ]; then
-  log "[9] starting dnsmasq..."
+  log "[10] starting dnsmasq..."
   dnsmasq --no-daemon --conf-file=/tmp/dnsmasq.conf &
   DNSMASQ_PID=$!
 fi
