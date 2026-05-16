@@ -126,7 +126,7 @@ load_env_file /env/runtime.env
 : "${DNSMASQ_ENABLED:=1}"
 : "${DNSMASQ_PORT:=53}"
 : "${DNSMASQ_UPSTREAM:=${SING_TUN_DNS_ADDRESS}#53}"
-: "${DNSMASQ_CACHE_SIZE:=4096}"
+: "${DNSMASQ_CACHE_SIZE:=0}"
 : "${DNSMASQ_LOG_QUERIES:=0}"
 : "${ENABLE_DIAGNOSTICS:=0}"
 : "${PROXY_CHECK_URL:=https://www.cloudflare.com/cdn-cgi/trace}"

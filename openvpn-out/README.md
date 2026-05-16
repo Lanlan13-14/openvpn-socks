@@ -249,7 +249,7 @@ docker run -d \
 | `DNSMASQ_ENABLED` | `1` | 启用 dnsmasq 作为客户端 DNS 缓存层 |
 | `DNSMASQ_PORT` | `53` | dnsmasq 监听端口 |
 | `DNSMASQ_UPSTREAM` | `172.19.0.2#53` | dnsmasq 上游，默认 sing-box TUN DNS 地址 |
-| `DNSMASQ_CACHE_SIZE` | `4096` | dnsmasq 缓存条目数 |
+| `DNSMASQ_CACHE_SIZE` | `0` | dnsmasq 缓存条目数；默认 `0` 表示禁用缓存 |
 | `DNSMASQ_LOG_QUERIES` | `0` | dnsmasq 查询日志开关 |
 
 ### 诊断
