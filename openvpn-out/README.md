@@ -4,38 +4,115 @@
 
 镜像名：`ghcr.io/lanlan13-14/openvpn-out`
 
-## 架构
+`openvpn-out` 会在一个容器内启动 OpenVPN Server、dnsmasq 和 sing-box：OpenVPN 客户端连入后，客户端流量按来源网段策略路由到 sing-box TUN，再通过上游代理出站。默认上游是 SOCKS5，也支持 AnyTLS、Shadowsocks、SS2022 和 UoT。
+
+## 工作链路
+
+数据链路：
 
 ```text
 OpenVPN client
   -> OpenVPN Server inside container, interface ovpn0
   -> policy route from OpenVPN CIDR
   -> sing-box TUN interface sb-tun0
-  -> anytls / shadowsocks 2022 / SOCKS5 outbound
+  -> SOCKS5 / AnyTLS / Shadowsocks / SS2022 outbound
 ```
 
-DNS 默认链路：
+DNS 链路：
 
 ```text
 OpenVPN client DNS
   -> OpenVPN gateway 10.8.0.1:53
-  -> dnsmasq cache
+  -> dnsmasq (cache disabled by default)
   -> sing-box TUN DNS address 172.19.0.2:53
-  -> sing-box DNS hijack (explicit 172.19.0.2:53 rule)
-  -> Remote DNS (DoH / DoT / plain DNS, via dns.server detour=proxy)
-  -> SOCKS5 outbound
+  -> sing-box hijack-dns
+  -> remote DNS server with detour=proxy
+  -> outbound proxy
 ```
 
-本镜像默认使用 sing-box TUN 作为 datapath，支持普通 DNS、DoH、DoT、DoQ 等远程 DNS 形态。
+说明：
 
-## 使用
+- `172.19.0.2` 是 sing-box TUN 内部 DNS 劫持目标地址，不是公网地址。
+- `DNS_DETOUR=proxy` 会让 sing-box DNS 模块访问上游 DNS 时走代理。
+- dnsmasq 默认 `cache-size=0`，不缓存 DNS。
+
+## 快速部署：Docker Compose
+
+推荐使用 Compose 部署，默认示例使用 bridge 模式并限制 Docker 日志大小。
 
 ```bash
-cd openvpn-out
-docker compose up -d --build
+mkdir -p /opt/openvpn-out
+cd /opt/openvpn-out
+curl -fsSLO https://raw.githubusercontent.com/Lanlan13-14/openvpn-socks/main/openvpn-out/docker-compose.yml
+mkdir -p env openvpn
 ```
 
-首次启动时会在挂载的 `./openvpn` 目录中自动生成：
+创建 `env/openvpn.env`：
+
+```env
+OVPN_PROTO=udp
+OVPN_PORT=1194
+OVPN_DEV=ovpn0
+OVPN_DNS=auto
+OVPN_NETWORK=10.8.0.0
+OVPN_NETMASK=255.255.255.0
+OVPN_CIDR=10.8.0.0/24
+OVPN_SERVER_IP=10.8.0.1
+OVPN_DUPLICATE_CN=1
+OVPN_SERVER_ADDR=server.example.com
+IPV6_ENABLED=0
+OVPN_IPV6_CIDR=fd42:42:42:42::/64
+```
+
+创建 `env/proxy.env`：
+
+```env
+PROXY_TYPE=socks
+PROXY_HOST=proxy.example.com
+PROXY_PORT=12240
+PROXY_USER=user
+PROXY_PASS=pass
+PROXY_UDP=true
+```
+
+创建 `env/runtime.env`：
+
+```env
+SING_BOX_LOG_LEVEL=warning
+SING_TUN_NAME=sb-tun0
+SING_TUN_ADDRESS=172.19.0.1/30
+SING_TUN_ADDRESS6=fd42:42:42:43::1/126
+SING_TUN_DNS_ADDRESS=172.19.0.2
+SING_TUN_MTU=9000
+SING_TUN_STACK=mixed
+DNS_SERVER_TYPE=https
+DNS_SERVER=1.1.1.1
+DNS_SERVER_PORT=443
+DNS_PATH=/dns-query
+DNS_TLS_SERVER_NAME=cloudflare-dns.com
+DNS_DETOUR=proxy
+DNS_STRATEGY=prefer_ipv4
+DNSMASQ_ENABLED=1
+DNSMASQ_PORT=53
+DNSMASQ_UPSTREAM=172.19.0.2#53
+DNSMASQ_CACHE_SIZE=0
+DNSMASQ_LOG_QUERIES=0
+ENABLE_DIAGNOSTICS=0
+```
+
+启动：
+
+```bash
+docker compose up -d
+```
+
+查看日志：
+
+```bash
+docker compose logs -f --tail=100
+```
+
+首次启动会在 `./openvpn` 目录生成：
 
 ```text
 openvpn/
@@ -44,76 +121,74 @@ openvpn/
     └── client.ovpn
 ```
 
-客户端配置文件会保存为：
+客户端配置文件路径：
 
 ```text
 ./openvpn/clients/client.ovpn
 ```
 
-多个设备复用同一个 `.ovpn`：
+## Docker Compose 文件说明
 
-```bash
--e OVPN_DUPLICATE_CN=1
+仓库内置 `docker-compose.yml` 已包含日志限制：
+
+```yaml
+logging:
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 ```
 
-## docker run 示例
+这会把单个容器日志文件限制为 10 MB，最多保留 3 个文件，避免 debug 日志撑爆磁盘。
+
+## docker run 部署示例
+
+### bridge 模式（推荐用于 OpenWrt / br-lan 场景）
+
+bridge 模式需要把 OpenVPN 端口映射出来。如果开启 IPv6，建议加上 IPv6 sysctl。
 
 ```bash
+docker rm -f openvpn-out 2>/dev/null || true
+docker pull ghcr.io/lanlan13-14/openvpn-out:latest
+
 docker run -d \
   --name openvpn-out \
-  --network host \
-  --cap-add NET_ADMIN \
-  --cap-add SYS_MODULE \
-  --device /dev/net/tun \
-  -v /root/ovpn:/openvpn \
-  -e OVPN_PROTO=tcp \
-  -e OVPN_PORT=18383 \
-  -e OVPN_DEV=ovpn0 \
-  -e OVPN_SERVER_ADDR=server.example.com \
-  -e OVPN_DUPLICATE_CN=1 \
-  -e PROXY_HOST=proxy.example.com \
-  -e PROXY_PORT=12240 \
-  -e PROXY_USER='user' \
-  -e PROXY_PASS='pass' \
-  -e PROXY_UDP=true \
-  -e DNS_SERVER=1.1.1.1 \
-  -e DNS_SERVER_PORT=443 \
-  -e DNS_PATH=/dns-query \
-  -e DNS_TLS_SERVER_NAME=cloudflare-dns.com \
-  -e DNS_DETOUR=proxy \
-  -e DNS_STRATEGY=prefer_ipv4 \
-  -e DNSMASQ_ENABLED=1 \
-  -e IPV6_ENABLED=1 \
-  -e OVPN_IPV6_CIDR=fd42:42:42:42::/64 \
-  -e SING_BOX_LOG_LEVEL=warning \
-  --restart unless-stopped \
-  ghcr.io/lanlan13-14/openvpn-out:latest
-```
-
-无认证 SOCKS5 时去掉 `PROXY_USER` / `PROXY_PASS`。
-
-### 1. 普通 SOCKS
-
-```bash
-docker run -d \
-  --name openvpn-out \
-  --network host \
+  --network bridge \
+  -p 1194:1194/udp \
+  --sysctl net.ipv6.conf.all.forwarding=1 \
+  --sysctl net.ipv6.conf.default.forwarding=1 \
   --cap-add NET_ADMIN \
   --cap-add SYS_MODULE \
   --device /dev/net/tun \
   -v /root/openvpn-out:/openvpn \
-  -e OVPN_SERVER_ADDR=server.example.com \
+  -e OVPN_PROTO=udp \
   -e OVPN_PORT=1194 \
+  -e OVPN_SERVER_ADDR=server.example.com \
+  -e OVPN_DUPLICATE_CN=1 \
   -e PROXY_TYPE=socks \
   -e PROXY_HOST=proxy.example.com \
   -e PROXY_PORT=12240 \
   -e PROXY_USER='user' \
   -e PROXY_PASS='pass' \
   -e PROXY_UDP=true \
+  -e DNS_SERVER_TYPE=https \
+  -e DNS_SERVER=1.1.1.1 \
+  -e DNS_SERVER_PORT=443 \
+  -e DNS_PATH=/dns-query \
+  -e DNS_TLS_SERVER_NAME=cloudflare-dns.com \
+  -e DNS_DETOUR=proxy \
+  -e DNSMASQ_CACHE_SIZE=0 \
+  -e SING_TUN_MTU=9000 \
+  --log-driver json-file \
+  --log-opt max-size=10m \
+  --log-opt max-file=3 \
+  --restart unless-stopped \
   ghcr.io/lanlan13-14/openvpn-out:latest
 ```
 
-### 2. 普通 SS + UoT
+### host 模式
+
+host 模式不需要端口映射，适合普通 Linux 服务器直接监听宿主机端口：
 
 ```bash
 docker run -d \
@@ -123,60 +198,99 @@ docker run -d \
   --cap-add SYS_MODULE \
   --device /dev/net/tun \
   -v /root/openvpn-out:/openvpn \
+  -e OVPN_PROTO=tcp \
+  -e OVPN_PORT=18383 \
   -e OVPN_SERVER_ADDR=server.example.com \
-  -e OVPN_PORT=1194 \
-  -e PROXY_TYPE=shadowsocks \
+  -e PROXY_TYPE=socks \
   -e PROXY_HOST=proxy.example.com \
-  -e PROXY_PORT=8388 \
-  -e PROXY_METHOD=aes-128-gcm \
-  -e PROXY_PASSWORD='ss-password' \
-  -e PROXY_UOT=1 \
-  -e PROXY_UOT_VERSION=2 \
+  -e PROXY_PORT=12240 \
+  -e PROXY_USER='user' \
+  -e PROXY_PASS='pass' \
+  --log-driver json-file \
+  --log-opt max-size=10m \
+  --log-opt max-file=3 \
+  --restart unless-stopped \
   ghcr.io/lanlan13-14/openvpn-out:latest
 ```
 
-### 3. SS2022 / AnyTLS 示例
+## 出站类型示例
 
-SS2022：
+### 1. 普通 SOCKS5
+
+```env
+PROXY_TYPE=socks
+PROXY_HOST=proxy.example.com
+PROXY_PORT=12240
+PROXY_USER=user
+PROXY_PASS=pass
+PROXY_UDP=true
+```
+
+### 2. 普通 Shadowsocks + UoT
+
+```env
+PROXY_TYPE=shadowsocks
+PROXY_HOST=proxy.example.com
+PROXY_PORT=8388
+PROXY_METHOD=aes-128-gcm
+PROXY_PASSWORD=ss-password
+PROXY_UOT=1
+PROXY_UOT_VERSION=2
+```
+
+### 3. SS2022
+
+```env
+PROXY_TYPE=ss2022
+PROXY_HOST=proxy.example.com
+PROXY_PORT=8388
+PROXY_METHOD=2022-blake3-aes-128-gcm
+PROXY_PASSWORD=ss2022-password
+```
+
+### 4. AnyTLS
+
+```env
+PROXY_TYPE=anytls
+PROXY_HOST=proxy.example.com
+PROXY_PORT=443
+PROXY_PASSWORD=anytls-password
+PROXY_TLS_SERVER_NAME=proxy.example.com
+```
+
+## IPv6
+
+IPv6 默认关闭。开启方式：
+
+```env
+IPV6_ENABLED=1
+OVPN_IPV6_CIDR=fd42:42:42:42::/64
+SING_TUN_ADDRESS6=fd42:42:42:43::1/126
+```
+
+bridge 模式下建议同时给容器加：
 
 ```bash
-docker run -d \
-  --name openvpn-out \
-  --network host \
-  --cap-add NET_ADMIN \
-  --cap-add SYS_MODULE \
-  --device /dev/net/tun \
-  -v /root/openvpn-out:/openvpn \
-  -e OVPN_SERVER_ADDR=server.example.com \
-  -e OVPN_PORT=1194 \
-  -e PROXY_TYPE=ss2022 \
-  -e PROXY_HOST=proxy.example.com \
-  -e PROXY_PORT=8388 \
-  -e PROXY_METHOD=2022-blake3-aes-128-gcm \
-  -e PROXY_PASSWORD='ss2022-password' \
-  ghcr.io/lanlan13-14/openvpn-out:latest
+--sysctl net.ipv6.conf.all.forwarding=1 \
+--sysctl net.ipv6.conf.default.forwarding=1
 ```
 
-AnyTLS：
+如果宿主机也未开启 IPv6 转发，需要在宿主机执行：
 
 ```bash
-docker run -d \
-  --name openvpn-out \
-  --network host \
-  --cap-add NET_ADMIN \
-  --cap-add SYS_MODULE \
-  --device /dev/net/tun \
-  -v /root/openvpn-out:/openvpn \
-  -e OVPN_SERVER_ADDR=server.example.com \
-  -e OVPN_PORT=1194 \
-  -e PROXY_TYPE=anytls \
-  -e PROXY_HOST=proxy.example.com \
-  -e PROXY_PORT=443 \
-  -e PROXY_PASSWORD='anytls-password' \
-  -e PROXY_TLS_SERVER_NAME=proxy.example.com \
-  ghcr.io/lanlan13-14/openvpn-out:latest
+sysctl -w net.ipv6.conf.all.forwarding=1
+sysctl -w net.ipv6.conf.default.forwarding=1
 ```
 
+诊断日志中如果出现：
+
+```text
+net.ipv6.conf.all.forwarding = 0
+```
+
+说明 IPv6 forwarding 没有生效。
+
+## 环境变量
 
 所有变量既可以写入 `env/*.env`，也可以通过 `docker run -e` 或 Compose `environment` 直接定义。
 
@@ -188,10 +302,10 @@ docker run -d \
 | `OVPN_PORT` | `1194` | OpenVPN 端口 |
 | `OVPN_DEV` | `ovpn0` | OpenVPN 服务端 tun 设备名 |
 | `OVPN_DNS` | `auto` | 推送给客户端的 DNS；默认使用 `OVPN_SERVER_IP` |
-| `OVPN_NETWORK` | `10.8.0.0` | VPN 网段 |
-| `OVPN_NETMASK` | `255.255.255.0` | VPN 掩码 |
-| `OVPN_CIDR` | `10.8.0.0/24` | VPN CIDR，用于策略路由 |
-| `OVPN_SERVER_IP` | `10.8.0.1` | OpenVPN 网段网关 |
+| `OVPN_NETWORK` | `10.8.0.0` | VPN IPv4 网段 |
+| `OVPN_NETMASK` | `255.255.255.0` | VPN IPv4 掩码 |
+| `OVPN_CIDR` | `10.8.0.0/24` | VPN IPv4 CIDR，用于策略路由 |
+| `OVPN_SERVER_IP` | `10.8.0.1` | OpenVPN IPv4 网关 |
 | `OVPN_MAX_CLIENTS` | `1024` | 最大客户端数量 |
 | `OVPN_DUPLICATE_CN` | `0` | 设为 `1` 允许多个设备复用同一客户端证书 |
 | `OVPN_CLIENT_TO_CLIENT` | `0` | 客户端互通开关 |
@@ -202,18 +316,22 @@ docker run -d \
 | `OVPN_AUTH` | `SHA256` | auth digest |
 | `OVPN_VERB` | `3` | OpenVPN 日志级别 |
 | `OVPN_PRESERVE_TEMPLATE` | `0` | 默认覆盖挂载目录旧 `server.conf.tpl`，设为 `1` 保留用户自定义模板 |
-| `IPV6_ENABLED` | `0` | IPv6 开关；设为 `1` 时启用 OpenVPN IPv6 地址池、sing-box TUN IPv6 地址和 IPv6 策略路由 |
+| `IPV6_ENABLED` | `0` | IPv6 开关 |
 | `OVPN_IPV6_CIDR` | `fd42:42:42:42::/64` | OpenVPN IPv6 ULA 地址池 |
 
 ### sing-box TUN / 路由
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `TPROXY_BACKEND` | `tun` | 保留兼容变量；当前默认 datapath 为 sing-box TUN |
 | `PROXY_TYPE` | `socks` | 上游出站类型：`socks`、`anytls`、`shadowsocks`、`ss`、`ss2022` |
+| `PROXY_HOST` | 必填 | 上游地址 |
+| `PROXY_PORT` | 必填 | 上游端口 |
+| `PROXY_USER` | 空 | SOCKS5 用户名 |
+| `PROXY_PASS` | 空 | SOCKS5 密码 |
 | `PROXY_PASSWORD` | 空 | AnyTLS / Shadowsocks 密码 |
-| `PROXY_METHOD` | `2022-blake3-aes-128-gcm` | Shadowsocks 加密方法；非 2022 也可配置 |
-| `PROXY_UOT` | `0` | 是否启用 UoT（UDP over TCP） |
+| `PROXY_METHOD` | `2022-blake3-aes-128-gcm` | Shadowsocks 加密方法 |
+| `PROXY_UDP` | `true` | SOCKS5 `udp_over_tcp` 开关 |
+| `PROXY_UOT` | `0` | Shadowsocks UoT 开关 |
 | `PROXY_UOT_VERSION` | `2` | UoT 版本：`1` 或 `2` |
 | `PROXY_PLUGIN` | 空 | Shadowsocks SIP003 插件名 |
 | `PROXY_PLUGIN_OPTS` | 空 | Shadowsocks 插件参数 |
@@ -221,7 +339,7 @@ docker run -d \
 | `PROXY_TLS_SERVER_NAME` | 空 | AnyTLS TLS SNI |
 | `PROXY_TLS_INSECURE` | `0` | AnyTLS 是否忽略证书校验 |
 | `PROXY_TLS_ALPN` | 空 | AnyTLS TLS ALPN，逗号分隔 |
-| `TABLE_ID` | `100` | OpenVPN CIDR 策略路由表 |
+| `TABLE_ID` | `100` | 策略路由表 |
 | `TABLE_PRIORITY` | `10000` | 策略路由优先级 |
 | `SING_TUN_NAME` | `sb-tun0` | sing-box TUN 接口名 |
 | `SING_TUN_ADDRESS` | `172.19.0.1/30` | sing-box TUN IPv4 地址 |
@@ -229,16 +347,6 @@ docker run -d \
 | `SING_TUN_DNS_ADDRESS` | `172.19.0.2` | sing-box TUN DNS 劫持地址 |
 | `SING_TUN_MTU` | `9000` | sing-box TUN MTU |
 | `SING_TUN_STACK` | `mixed` | sing-box TUN stack：`system`、`gvisor`、`mixed` |
-
-### SOCKS5 outbound
-
-| 变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `PROXY_HOST` | 必填 | 上游 SOCKS5 地址 |
-| `PROXY_PORT` | 必填 | 上游 SOCKS5 端口 |
-| `PROXY_USER` | 空 | 上游 SOCKS5 用户名 |
-| `PROXY_PASS` | 空 | 上游 SOCKS5 密码 |
-| `PROXY_UDP` | `true` | sing-box `udp_over_tcp` |
 
 ### DNS
 
@@ -249,9 +357,9 @@ docker run -d \
 | `DNS_SERVER_PORT` | `443` | 远程 DNS 端口；普通 DNS 一般为 `53`，DoT/DoQ 常用 `853` |
 | `DNS_PATH` | `/dns-query` | 远程 HTTPS/H3 DNS 路径 |
 | `DNS_TLS_SERVER_NAME` | `cloudflare-dns.com` | TLS 相关 DNS 的 SNI / 证书域名 |
-| `DNS_DETOUR` | `proxy` | DNS 查询出站：`proxy` 走上游，`direct` 直连；默认强制走代理 |
+| `DNS_DETOUR` | `proxy` | DNS 查询出站：`proxy` 走上游，`direct` 直连 |
 | `DNS_STRATEGY` | `prefer_ipv4` | `prefer_ipv4`、`prefer_ipv6`、`ipv4_only`、`ipv6_only` |
-| `DNSMASQ_ENABLED` | `1` | 启用 dnsmasq 作为客户端 DNS 缓存层 |
+| `DNSMASQ_ENABLED` | `1` | 启用 dnsmasq 作为客户端 DNS 层 |
 | `DNSMASQ_PORT` | `53` | dnsmasq 监听端口 |
 | `DNSMASQ_UPSTREAM` | `172.19.0.2#53` | dnsmasq 上游，默认 sing-box TUN DNS 地址 |
 | `DNSMASQ_CACHE_SIZE` | `0` | dnsmasq 缓存条目数；默认 `0` 表示禁用缓存 |
@@ -262,58 +370,14 @@ docker run -d \
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `SING_BOX_LOG_LEVEL` | `warning` | sing-box 日志级别 |
-| `ENABLE_DIAGNOSTICS` | `0` | 设为 `1` 打印 sing-box 配置、接口、策略路由、iptables 规则并做 SOCKS/DoH 检测 |
+| `ENABLE_DIAGNOSTICS` | `0` | 设为 `1` 打印配置、接口、路由和出站检测信息 |
 | `PROXY_CHECK_URL` | `https://www.cloudflare.com/cdn-cgi/trace` | 诊断模式下测试 TCP 出站的 URL |
-| `PROXY_CHECK_IPV6_URL` | `https://[2606:4700:4700::1111]/cdn-cgi/trace` | 诊断模式下测试 IPv6 目标出站的 URL；SOCKS 场景下不强制 curl 以 IPv6 连接 SOCKS 服务器 |
+| `PROXY_CHECK_IPV6_URL` | `https://[2606:4700:4700::1111]/cdn-cgi/trace` | 诊断模式下测试 IPv6 目标出站的 URL |
 
-## br-lan 模式（OpenWrt / 路由器场景）
+## 注意事项
 
-如果你的宿主机是 OpenWrt，或者希望服务跑在 `br-lan` 场景下，可以使用 **bridge 模式**：
-
-1. 容器使用 `--network bridge`，不要用 `host`。
-2. 通过 `-p` 把 OpenVPN 端口映射到宿主机 LAN 口可达地址。
-3. 如果开启 `IPV6_ENABLED=1`，建议给容器增加 `--sysctl net.ipv6.conf.all.forwarding=1` 和 `--sysctl net.ipv6.conf.default.forwarding=1`。
-4. 把 `OVPN_SERVER_ADDR` 设置为 `br-lan` 对应的 LAN IPv4 地址。
-5. 确保路由器防火墙允许 `OVPN_PORT` 从 LAN 侧入站。
-6. 如果宿主机本身就是网关，`dnsmasq` 仍然可以正常做客户端 DNS 缓存层。
-7. 其他 OpenVPN / sing-box 环境变量保持不变。
-
-示例：
-
-```bash
-docker run -d \
-  --name openvpn-out \
-  --network bridge \
-  -p 1194:1194/udp \
-  --sysctl net.ipv6.conf.all.forwarding=1 \
-  --sysctl net.ipv6.conf.default.forwarding=1 \
-  --cap-add NET_ADMIN \
-  --cap-add SYS_MODULE \
-  --device /dev/net/tun \
-  -v /root/openvpn-out:/openvpn \
-  -e OVPN_SERVER_ADDR=192.168.1.1 \
-  -e OVPN_PORT=1194 \
-  -e IPV6_ENABLED=1 \
-  -e OVPN_IPV6_CIDR=fd42:42:42:42::/64 \
-  -e PROXY_TYPE=shadowsocks \
-  -e PROXY_HOST=proxy.example.com \
-  -e PROXY_PORT=8388 \
-  -e PROXY_METHOD=2022-blake3-aes-128-gcm \
-  -e PROXY_PASSWORD='your-password' \
-  ghcr.io/lanlan13-14/openvpn-out:latest
-```
-
-
-OpenVPN 2.6 会在配置和宿主机内核支持时机会性使用 DCO。DCO 需要宿主机支持并加载 `ovpn-dco` 内核模块。
-
-```bash
-modprobe ovpn-dco
-```
-
-## 注意
-
-- 推荐 `network_mode: host` / `--network host`。
-- 需要 `NET_ADMIN` 和 `/dev/net/tun`。
-- 当前 datapath 是 sing-box TUN：`OpenVPN ovpn0 -> ip rule from OVPN_CIDR -> sb-tun0 -> SOCKS5`。
-- 容器启动会清理旧版 vpn-box 遗留的 TPROXY / DNS REDIRECT / fwmark 规则。
+- 必须提供 `NET_ADMIN` 和 `/dev/net/tun`。
+- 推荐限制容器日志大小，尤其开启 `SING_BOX_LOG_LEVEL=debug` 或 `ENABLE_DIAGNOSTICS=1` 时。
+- bridge 模式需要映射 OpenVPN 端口；host 模式不需要 `-p`。
 - 如果挂载目录已有旧 `server.conf.tpl`，默认会覆盖为镜像内新模板；如需保留自定义模板，设置 `OVPN_PRESERVE_TEMPLATE=1`。
+- 容器启动会清理旧版 vpn-box 遗留的 TPROXY / DNS REDIRECT / fwmark 规则。

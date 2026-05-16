@@ -2,19 +2,25 @@ version: "3.9"
 
 services:
   openvpn-out:
-    build:
-      context: .
-      args:
-        SING_BOX_VERSION: "1.12.0"
-    image: openvpn-out:local
+    image: ghcr.io/lanlan13-14/openvpn-out:latest
     container_name: openvpn-out
-    network_mode: host
+    restart: unless-stopped
+    network_mode: bridge
+    ports:
+      - "1194:1194/udp"
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
     devices:
       - /dev/net/tun
+    sysctls:
+      net.ipv6.conf.all.forwarding: "1"
+      net.ipv6.conf.default.forwarding: "1"
     volumes:
       - ./env:/env:ro
       - ./openvpn:/openvpn
-    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
