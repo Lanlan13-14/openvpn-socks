@@ -28,11 +28,147 @@ OpenVPN client DNS
 
 本镜像默认使用 sing-box TUN 作为 datapath，支持普通 DNS、DoH、DoT、DoQ 等远程 DNS 形态。
 
-## 使用
+## Docker Compose 部署
+
+推荐使用 Docker Compose 部署。示例使用 bridge 模式，并在 Compose 文件里限制 Docker 日志大小。
+
+创建目录：
 
 ```bash
-cd openvpn-out
-docker compose up -d --build
+mkdir -p /opt/openvpn-out/env /opt/openvpn-out/openvpn
+cd /opt/openvpn-out
+```
+
+创建 `docker-compose.yml`：
+
+```yaml
+version: "3.9"
+
+services:
+  openvpn-out:
+    image: ghcr.io/lanlan13-14/openvpn-out:latest
+    container_name: openvpn-out
+    restart: unless-stopped
+    network_mode: bridge
+    ports:
+      - "1194:1194/udp"
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun
+    sysctls:
+      net.ipv6.conf.all.forwarding: "1"
+      net.ipv6.conf.default.forwarding: "1"
+    volumes:
+      - ./env:/env:ro
+      - ./openvpn:/openvpn
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
+日志限制说明：
+
+- `max-size: "10m"`：单个容器日志文件最大 10 MB。
+- `max-file: "3"`：最多保留 3 个日志文件。
+- 这样可以避免 debug 日志把磁盘写满。
+
+创建 `env/openvpn.env`：
+
+```env
+OVPN_PROTO=udp
+OVPN_PORT=1194
+OVPN_DEV=ovpn0
+OVPN_DNS=auto
+OVPN_NETWORK=10.8.0.0
+OVPN_NETMASK=255.255.255.0
+OVPN_CIDR=10.8.0.0/24
+OVPN_SERVER_IP=10.8.0.1
+OVPN_MAX_CLIENTS=1024
+OVPN_DUPLICATE_CN=0
+OVPN_CLIENT_TO_CLIENT=0
+OVPN_CLIENT_NAME=client
+OVPN_SERVER_ADDR=server.example.com
+OVPN_CIPHER=AES-128-GCM
+OVPN_DATA_CIPHERS=AES-128-GCM:AES-256-GCM:CHACHA20-POLY1305
+OVPN_AUTH=SHA256
+OVPN_VERB=3
+OVPN_PRESERVE_TEMPLATE=0
+IPV6_ENABLED=0
+OVPN_IPV6_CIDR=fd42:42:42:42::/64
+```
+
+创建 `env/proxy.env`：
+
+```env
+PROXY_TYPE=socks
+PROXY_HOST=proxy.example.com
+PROXY_PORT=12240
+PROXY_USER=user
+PROXY_PASS=pass
+PROXY_PASSWORD=
+PROXY_METHOD=2022-blake3-aes-128-gcm
+PROXY_UDP=true
+PROXY_UOT=0
+PROXY_UOT_VERSION=2
+PROXY_PLUGIN=
+PROXY_PLUGIN_OPTS=
+PROXY_NETWORK=
+PROXY_TLS_SERVER_NAME=
+PROXY_TLS_INSECURE=0
+PROXY_TLS_ALPN=
+```
+
+无认证 SOCKS5 时把 `PROXY_USER` 和 `PROXY_PASS` 留空即可。
+
+创建 `env/runtime.env`：
+
+```env
+MARK=1
+TABLE_ID=100
+TABLE_PRIORITY=10000
+TPROXY_PORT=7893
+TPROXY_BACKEND=tun
+FULL_PROXY=1
+SING_BOX_LOG_LEVEL=warning
+SING_TUN_NAME=sb-tun0
+SING_TUN_ADDRESS=172.19.0.1/30
+SING_TUN_ADDRESS6=fd42:42:42:43::1/126
+SING_TUN_DNS_ADDRESS=172.19.0.2
+SING_TUN_MTU=9000
+SING_TUN_STACK=mixed
+DNS_SERVER_TYPE=https
+DNS_SERVER=1.1.1.1
+DNS_SERVER_PORT=443
+DNS_PATH=/dns-query
+DNS_TLS_SERVER_NAME=cloudflare-dns.com
+DNS_TLS_INSECURE=0
+DNS_TLS_ALPN=
+DNS_DETOUR=proxy
+DNS_STRATEGY=prefer_ipv4
+DNSMASQ_ENABLED=1
+DNSMASQ_PORT=53
+DNSMASQ_UPSTREAM=172.19.0.2#53
+DNSMASQ_CACHE_SIZE=0
+DNSMASQ_LOG_QUERIES=0
+ENABLE_DIAGNOSTICS=0
+PROXY_CHECK_URL=https://www.cloudflare.com/cdn-cgi/trace
+PROXY_CHECK_IPV6_URL=https://[2606:4700:4700::1111]/cdn-cgi/trace
+```
+
+启动：
+
+```bash
+docker compose up -d
+```
+
+查看日志：
+
+```bash
+docker compose logs -f --tail=100
 ```
 
 首次启动时会在挂载的 `./openvpn` 目录中自动生成：
@@ -52,9 +188,11 @@ openvpn/
 
 多个设备复用同一个 `.ovpn`：
 
-```bash
--e OVPN_DUPLICATE_CN=1
+```env
+OVPN_DUPLICATE_CN=1
 ```
+
+所有变量既可以写入 `env/*.env`，也可以通过 Compose `environment` 直接定义。
 
 ## docker run 示例
 
