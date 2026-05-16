@@ -175,6 +175,12 @@ def build_config():
                     'action': 'hijack-dns',
                 },
                 {
+                    'ip_cidr': [f"{env('DNS_SERVER', '1.1.1.1')}/32"],
+                    'port': maybe_int(env('DNS_SERVER_PORT'), dns_server_defaults(env('DNS_SERVER_TYPE', 'https'))),
+                    'action': 'route',
+                    'outbound': env('DNS_DETOUR', 'proxy'),
+                },
+                {
                     'protocol': 'dns',
                     'action': 'hijack-dns',
                 },

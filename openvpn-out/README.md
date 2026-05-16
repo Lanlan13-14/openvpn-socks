@@ -22,7 +22,7 @@ OpenVPN client DNS
   -> dnsmasq cache
   -> sing-box TUN DNS address 172.19.0.2:53
   -> sing-box DNS hijack (explicit 172.19.0.2:53 rule)
-  -> Remote DNS (DoH / DoT / plain DNS)
+  -> Remote DNS (DoH / DoT / plain DNS, routed by proxy outbound)
   -> SOCKS5 outbound
 ```
 
