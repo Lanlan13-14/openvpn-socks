@@ -68,8 +68,14 @@ def build_proxy_outbound():
             'tag': 'proxy',
             'server': host,
             'server_port': port,
-            'udp_over_tcp': truthy(env('PROXY_UDP', 'true')),
         }
+        if truthy(env('PROXY_UOT')):
+            outbound['udp_over_tcp'] = {
+                'enabled': True,
+                'version': maybe_int(env('PROXY_UOT_VERSION'), 2),
+            }
+        elif env('PROXY_UDP', '').strip():
+            outbound['udp_over_tcp'] = truthy(env('PROXY_UDP', 'true'))
         user = env('PROXY_USER')
         password = env('PROXY_PASS')
         if user:
@@ -100,7 +106,7 @@ def build_proxy_outbound():
         password = env('PROXY_PASSWORD', env('PROXY_PASS'))
         if not password:
             raise SystemExit('missing PROXY_PASSWORD for shadowsocks outbound')
-        return {
+        outbound = {
             'type': 'shadowsocks',
             'tag': 'proxy',
             'server': host,
@@ -108,6 +114,23 @@ def build_proxy_outbound():
             'method': method,
             'password': password,
         }
+        if truthy(env('PROXY_UOT')):
+            outbound['udp_over_tcp'] = {
+                'enabled': True,
+                'version': maybe_int(env('PROXY_UOT_VERSION'), 2),
+            }
+        elif env('PROXY_UDP', '').strip():
+            outbound['udp_over_tcp'] = truthy(env('PROXY_UDP', 'true'))
+        plugin = env('PROXY_PLUGIN')
+        if plugin:
+            outbound['plugin'] = plugin
+        plugin_opts = env('PROXY_PLUGIN_OPTS')
+        if plugin_opts:
+            outbound['plugin_opts'] = plugin_opts
+        network = env('PROXY_NETWORK')
+        if network:
+            outbound['network'] = [x.strip() for x in network.split(',') if x.strip()]
+        return outbound
 
     raise SystemExit(f'unsupported PROXY_TYPE: {proxy_type}')
 

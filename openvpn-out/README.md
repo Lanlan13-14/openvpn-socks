@@ -122,9 +122,14 @@ docker run -d \
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `TPROXY_BACKEND` | `tun` | 保留兼容变量；当前默认 datapath 为 sing-box TUN |
-| `PROXY_TYPE` | `socks` | 上游出站类型：`socks`、`anytls`、`shadowsocks` |
-| `PROXY_PASSWORD` | 空 | AnyTLS / Shadowsocks 2022 密码 |
-| `PROXY_METHOD` | `2022-blake3-aes-128-gcm` | Shadowsocks 加密方法 |
+| `PROXY_TYPE` | `socks` | 上游出站类型：`socks`、`anytls`、`shadowsocks`、`ss`、`ss2022` |
+| `PROXY_PASSWORD` | 空 | AnyTLS / Shadowsocks 密码 |
+| `PROXY_METHOD` | `2022-blake3-aes-128-gcm` | Shadowsocks 加密方法；非 2022 也可配置 |
+| `PROXY_UOT` | `0` | 是否启用 UoT（UDP over TCP） |
+| `PROXY_UOT_VERSION` | `2` | UoT 版本：`1` 或 `2` |
+| `PROXY_PLUGIN` | 空 | Shadowsocks SIP003 插件名 |
+| `PROXY_PLUGIN_OPTS` | 空 | Shadowsocks 插件参数 |
+| `PROXY_NETWORK` | 空 | Shadowsocks 启用网络：`tcp,udp` |
 | `PROXY_TLS_SERVER_NAME` | 空 | AnyTLS TLS SNI |
 | `PROXY_TLS_INSECURE` | `0` | AnyTLS 是否忽略证书校验 |
 | `PROXY_TLS_ALPN` | 空 | AnyTLS TLS ALPN，逗号分隔 |
