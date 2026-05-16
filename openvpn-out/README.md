@@ -69,9 +69,9 @@ docker run -d \
   -e OVPN_PROTO=tcp \
   -e OVPN_PORT=18383 \
   -e OVPN_DEV=ovpn0 \
-  -e OVPN_SERVER_ADDR=139.162.1.152 \
+  -e OVPN_SERVER_ADDR=YOUR_SERVER_IP \
   -e OVPN_DUPLICATE_CN=1 \
-  -e PROXY_HOST=116.251.216.36 \
+  -e PROXY_HOST=YOUR_PROXY_HOST \
   -e PROXY_PORT=12240 \
   -e PROXY_USER='user' \
   -e PROXY_PASS='pass' \
@@ -100,10 +100,10 @@ docker run -d \
   --cap-add SYS_MODULE \
   --device /dev/net/tun \
   -v /root/openvpn-out:/openvpn \
-  -e OVPN_SERVER_ADDR=139.162.1.152 \
+  -e OVPN_SERVER_ADDR=YOUR_SERVER_IP \
   -e OVPN_PORT=1194 \
   -e PROXY_TYPE=socks \
-  -e PROXY_HOST=116.251.216.36 \
+  -e PROXY_HOST=YOUR_PROXY_HOST \
   -e PROXY_PORT=12240 \
   -e PROXY_USER='user' \
   -e PROXY_PASS='pass' \
@@ -121,10 +121,10 @@ docker run -d \
   --cap-add SYS_MODULE \
   --device /dev/net/tun \
   -v /root/openvpn-out:/openvpn \
-  -e OVPN_SERVER_ADDR=139.162.1.152 \
+  -e OVPN_SERVER_ADDR=YOUR_SERVER_IP \
   -e OVPN_PORT=1194 \
   -e PROXY_TYPE=shadowsocks \
-  -e PROXY_HOST=116.251.216.36 \
+  -e PROXY_HOST=YOUR_PROXY_HOST \
   -e PROXY_PORT=8388 \
   -e PROXY_METHOD=aes-128-gcm \
   -e PROXY_PASSWORD='ss-password' \
@@ -145,10 +145,10 @@ docker run -d \
   --cap-add SYS_MODULE \
   --device /dev/net/tun \
   -v /root/openvpn-out:/openvpn \
-  -e OVPN_SERVER_ADDR=139.162.1.152 \
+  -e OVPN_SERVER_ADDR=YOUR_SERVER_IP \
   -e OVPN_PORT=1194 \
   -e PROXY_TYPE=ss2022 \
-  -e PROXY_HOST=116.251.216.36 \
+  -e PROXY_HOST=YOUR_PROXY_HOST \
   -e PROXY_PORT=8388 \
   -e PROXY_METHOD=2022-blake3-aes-128-gcm \
   -e PROXY_PASSWORD='ss2022-password' \
@@ -165,10 +165,10 @@ docker run -d \
   --cap-add SYS_MODULE \
   --device /dev/net/tun \
   -v /root/openvpn-out:/openvpn \
-  -e OVPN_SERVER_ADDR=139.162.1.152 \
+  -e OVPN_SERVER_ADDR=YOUR_SERVER_IP \
   -e OVPN_PORT=1194 \
   -e PROXY_TYPE=anytls \
-  -e PROXY_HOST=116.251.216.36 \
+  -e PROXY_HOST=YOUR_PROXY_HOST \
   -e PROXY_PORT=443 \
   -e PROXY_PASSWORD='anytls-password' \
   -e PROXY_TLS_SERVER_NAME=example.com \
