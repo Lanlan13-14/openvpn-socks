@@ -50,7 +50,7 @@
       "tag": "proxy",
       "server": "${PROXY_HOST}",
       "server_port": ${PROXY_PORT},
-      "udp_over_tcp": ${PROXY_UDP}
+      "udp_over_tcp": ${PROXY_UDP_OVER_TCP}
     }
   ],
   "route": {

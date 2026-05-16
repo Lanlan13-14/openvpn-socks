@@ -52,7 +52,7 @@
       "server_port": ${PROXY_PORT},
       "username": "${PROXY_USER}",
       "password": "${PROXY_PASS}",
-      "udp_over_tcp": ${PROXY_UDP}
+      "udp_over_tcp": ${PROXY_UDP_OVER_TCP}
     }
   ],
   "route": {

@@ -95,6 +95,8 @@ OVPN_SERVER_ADDR=server.example.com
 OVPN_CIPHER=AES-128-GCM
 OVPN_DATA_CIPHERS=AES-128-GCM:AES-256-GCM:CHACHA20-POLY1305
 OVPN_AUTH=SHA256
+OVPN_TUN_MTU=1400
+OVPN_MSSFIX=1360
 OVPN_VERB=3
 OVPN_PRESERVE_TEMPLATE=0
 IPV6_ENABLED=0
@@ -111,7 +113,7 @@ PROXY_USER=user
 PROXY_PASS=pass
 PROXY_PASSWORD=
 PROXY_METHOD=2022-blake3-aes-128-gcm
-PROXY_UDP=true
+PROXY_UDP_OVER_TCP=true
 PROXY_UOT=0
 PROXY_UOT_VERSION=2
 PROXY_PLUGIN=
@@ -213,7 +215,7 @@ docker run -d \
   -e PROXY_PORT=12240 \
   -e PROXY_USER='user' \
   -e PROXY_PASS='pass' \
-  -e PROXY_UDP=true \
+  -e PROXY_UDP_OVER_TCP=true \
   -e DNS_SERVER=1.1.1.1 \
   -e DNS_SERVER_PORT=443 \
   -e DNS_PATH=/dns-query \
@@ -229,6 +231,8 @@ docker run -d \
 ```
 
 无认证 SOCKS5 时去掉 `PROXY_USER` / `PROXY_PASS`。
+
+`PROXY_UDP_OVER_TCP` 控制 sing-box 的 `udp_over_tcp`，不是原生 UDP 开关。旧变量 `PROXY_UDP` 仍兼容，但推荐使用 `PROXY_UDP_OVER_TCP`。
 
 ### 1. 普通 SOCKS
 
@@ -247,7 +251,7 @@ docker run -d \
   -e PROXY_PORT=12240 \
   -e PROXY_USER='user' \
   -e PROXY_PASS='pass' \
-  -e PROXY_UDP=true \
+  -e PROXY_UDP_OVER_TCP=true \
   ghcr.io/lanlan13-14/openvpn-out:latest
 ```
 
@@ -338,6 +342,8 @@ docker run -d \
 | `OVPN_CIPHER` | `AES-128-GCM` | fallback cipher |
 | `OVPN_DATA_CIPHERS` | `AES-128-GCM:AES-256-GCM:CHACHA20-POLY1305` | DCO 友好的 AEAD cipher 列表 |
 | `OVPN_AUTH` | `SHA256` | auth digest |
+| `OVPN_TUN_MTU` | `1400` | OpenVPN TUN 设备 MTU，对应 `tun-mtu` |
+| `OVPN_MSSFIX` | `1360` | OpenVPN TCP MSS 限制，对应 `mssfix`，用于降低路径 MTU 问题 |
 | `OVPN_VERB` | `3` | OpenVPN 日志级别 |
 | `OVPN_PRESERVE_TEMPLATE` | `0` | 默认覆盖挂载目录旧 `server.conf.tpl`，设为 `1` 保留用户自定义模板 |
 | `IPV6_ENABLED` | `0` | IPv6 开关；设为 `1` 时启用 OpenVPN IPv6 地址池、sing-box TUN IPv6 地址和 IPv6 策略路由 |
@@ -376,7 +382,7 @@ docker run -d \
 | `PROXY_PORT` | 必填 | 上游 SOCKS5 端口 |
 | `PROXY_USER` | 空 | 上游 SOCKS5 用户名 |
 | `PROXY_PASS` | 空 | 上游 SOCKS5 密码 |
-| `PROXY_UDP` | `true` | sing-box `udp_over_tcp` |
+| `PROXY_UDP_OVER_TCP` | `true` | 是否启用 sing-box `udp_over_tcp`；变量名更明确，旧变量 `PROXY_UDP` 仍兼容 |
 
 ### DNS
 

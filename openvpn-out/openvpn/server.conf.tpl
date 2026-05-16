@@ -25,6 +25,9 @@ data-ciphers ${OVPN_DATA_CIPHERS}
 data-ciphers-fallback ${OVPN_CIPHER}
 auth ${OVPN_AUTH}
 
+tun-mtu ${OVPN_TUN_MTU}
+mssfix ${OVPN_MSSFIX}
+
 keepalive 10 120
 persist-key
 persist-tun

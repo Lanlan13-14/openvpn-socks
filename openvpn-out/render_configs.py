@@ -75,8 +75,8 @@ def build_proxy_outbound():
                 'enabled': True,
                 'version': maybe_int(env('PROXY_UOT_VERSION'), 2),
             }
-        elif env('PROXY_UDP', '').strip():
-            outbound['udp_over_tcp'] = truthy(env('PROXY_UDP', 'true'))
+        elif env('PROXY_UDP_OVER_TCP', env('PROXY_UDP', '')).strip():
+            outbound['udp_over_tcp'] = truthy(env('PROXY_UDP_OVER_TCP', env('PROXY_UDP', 'true')))
         user = env('PROXY_USER')
         password = env('PROXY_PASS')
         if user:
@@ -120,8 +120,8 @@ def build_proxy_outbound():
                 'enabled': True,
                 'version': maybe_int(env('PROXY_UOT_VERSION'), 2),
             }
-        elif env('PROXY_UDP', '').strip():
-            outbound['udp_over_tcp'] = truthy(env('PROXY_UDP', 'true'))
+        elif env('PROXY_UDP_OVER_TCP', env('PROXY_UDP', '')).strip():
+            outbound['udp_over_tcp'] = truthy(env('PROXY_UDP_OVER_TCP', env('PROXY_UDP', 'true')))
         plugin = env('PROXY_PLUGIN')
         if plugin:
             outbound['plugin'] = plugin
