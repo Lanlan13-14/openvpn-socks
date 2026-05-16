@@ -14,28 +14,57 @@ load_env_file() {
   fi
 }
 
+wait_interface() {
+  local dev="$1"
+  local timeout="${2:-20}"
+  local i=0
+  while [ "$i" -lt "$timeout" ]; do
+    if ip link show "$dev" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+  return 1
+}
+
+wait_ipv4() {
+  local dev="$1"
+  local ipaddr="$2"
+  local timeout="${3:-20}"
+  local i=0
+  while [ "$i" -lt "$timeout" ]; do
+    if ip -4 addr show dev "$dev" | grep -q "${ipaddr}/"; then
+      return 0
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+  return 1
+}
+
 cleanup_legacy_rules() {
   log "[0] cleaning old vpn-box routing rules..."
+
   while ip rule del fwmark "${MARK}" table "${TABLE_ID}" 2>/dev/null; do :; done
+  while ip rule del from "${OVPN_CIDR}" table "${TABLE_ID}" 2>/dev/null; do :; done
   ip route flush table "${TABLE_ID}" 2>/dev/null || true
 
   iptables -t mangle -D PREROUTING -j VPN_BOX_TPROXY 2>/dev/null || true
   iptables -t mangle -F VPN_BOX_TPROXY 2>/dev/null || true
   iptables -t mangle -X VPN_BOX_TPROXY 2>/dev/null || true
 
-  for dev in "${OVPN_DEV}" tun0 ovpn0; do
-    while iptables -t mangle -D PREROUTING -i "$dev" -p tcp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}" 2>/dev/null; do :; done
-    while iptables -t mangle -D PREROUTING -i "$dev" -p udp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}" 2>/dev/null; do :; done
-    while iptables -t mangle -D PREROUTING -i "$dev" -p tcp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}" 2>/dev/null; do :; done
-    while iptables -t mangle -D PREROUTING -i "$dev" -p udp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}" 2>/dev/null; do :; done
-    while iptables -t mangle -D PREROUTING -i "$dev" -p tcp ! -d "${OVPN_CIDR}" -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}" 2>/dev/null; do :; done
-    while iptables -t mangle -D PREROUTING -i "$dev" -p udp ! -d "${OVPN_CIDR}" -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}" 2>/dev/null; do :; done
-    while iptables -t mangle -D PREROUTING -i "$dev" -p tcp ! -d "${OVPN_CIDR}" -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}" 2>/dev/null; do :; done
-    while iptables -t mangle -D PREROUTING -i "$dev" -p udp ! -d "${OVPN_CIDR}" -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}" 2>/dev/null; do :; done
-    while iptables -t mangle -D PREROUTING -i "$dev" -p tcp ! -d "${OVPN_CIDR}" ! --dport 53 -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}" 2>/dev/null; do :; done
-    while iptables -t mangle -D PREROUTING -i "$dev" -p udp ! -d "${OVPN_CIDR}" ! --dport 53 -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}" 2>/dev/null; do :; done
-    while iptables -t nat -D PREROUTING -i "$dev" -p udp --dport 53 -j REDIRECT --to-ports 1053 2>/dev/null; do :; done
-    while iptables -t nat -D PREROUTING -i "$dev" -p tcp --dport 53 -j REDIRECT --to-ports 1053 2>/dev/null; do :; done
+  local rule delete_rule
+  while iptables -t mangle -S PREROUTING | grep -q -- "-j TPROXY .*--on-port ${TPROXY_PORT}"; do
+    rule=$(iptables -t mangle -S PREROUTING | grep -- "-j TPROXY .*--on-port ${TPROXY_PORT}" | head -n 1)
+    delete_rule=${rule/-A PREROUTING/-D PREROUTING}
+    iptables -t mangle $delete_rule 2>/dev/null || break
+  done
+
+  while iptables -t nat -S PREROUTING | grep -q -- "--dport 53 .*REDIRECT .*--to-ports 1053"; do
+    rule=$(iptables -t nat -S PREROUTING | grep -- "--dport 53 .*REDIRECT .*--to-ports 1053" | head -n 1)
+    delete_rule=${rule/-A PREROUTING/-D PREROUTING}
+    iptables -t nat $delete_rule 2>/dev/null || break
   done
 }
 
@@ -47,7 +76,7 @@ load_env_file /env/runtime.env
 : "${OVPN_PROTO:=udp}"
 : "${OVPN_PORT:=1194}"
 : "${OVPN_DEV:=ovpn0}"
-: "${OVPN_DNS:=1.1.1.1}"
+: "${OVPN_DNS:=auto}"
 : "${OVPN_NETWORK:=10.8.0.0}"
 : "${OVPN_NETMASK:=255.255.255.0}"
 : "${OVPN_CIDR:=10.8.0.0/24}"
@@ -61,6 +90,7 @@ load_env_file /env/runtime.env
 : "${OVPN_DATA_CIPHERS:=AES-128-GCM:AES-256-GCM:CHACHA20-POLY1305}"
 : "${OVPN_AUTH:=SHA256}"
 : "${OVPN_VERB:=3}"
+: "${OVPN_PRESERVE_TEMPLATE:=0}"
 
 : "${PROXY_HOST:?missing PROXY_HOST}"
 : "${PROXY_PORT:?missing PROXY_PORT}"
@@ -68,12 +98,18 @@ load_env_file /env/runtime.env
 : "${PROXY_PASS:=}"
 : "${PROXY_UDP:=true}"
 
-: "${MARK:=1}"
 : "${TABLE_ID:=100}"
+: "${TABLE_PRIORITY:=10000}"
+: "${MARK:=1}"
 : "${TPROXY_PORT:=7893}"
-: "${TPROXY_BACKEND:=iptables}"
+: "${TPROXY_BACKEND:=tun}"
 : "${FULL_PROXY:=1}"
 : "${SING_BOX_LOG_LEVEL:=warning}"
+: "${SING_TUN_NAME:=sb-tun0}"
+: "${SING_TUN_ADDRESS:=172.19.0.1/30}"
+: "${SING_TUN_DNS_ADDRESS:=172.19.0.2}"
+: "${SING_TUN_MTU:=1500}"
+: "${SING_TUN_STACK:=mixed}"
 : "${DNS_SERVER:=1.1.1.1}"
 : "${DNS_SERVER_PORT:=443}"
 : "${DNS_PATH:=/dns-query}"
@@ -82,23 +118,28 @@ load_env_file /env/runtime.env
 : "${DNS_DETOUR:=proxy}"
 : "${DNSMASQ_ENABLED:=1}"
 : "${DNSMASQ_PORT:=53}"
-: "${DNSMASQ_UPSTREAM:=127.0.0.1#${TPROXY_PORT}}"
+: "${DNSMASQ_UPSTREAM:=${SING_TUN_DNS_ADDRESS}#53}"
 : "${DNSMASQ_CACHE_SIZE:=4096}"
 : "${DNSMASQ_LOG_QUERIES:=0}"
 : "${ENABLE_DIAGNOSTICS:=0}"
 : "${PROXY_CHECK_URL:=https://www.cloudflare.com/cdn-cgi/trace}"
 
+if [ "${OVPN_DNS}" = "auto" ] || [ -z "${OVPN_DNS}" ]; then
+  if [ "${DNSMASQ_ENABLED}" = "1" ] || [ "${DNSMASQ_ENABLED}" = "true" ]; then
+    OVPN_DNS="${OVPN_SERVER_IP}"
+  else
+    OVPN_DNS="${SING_TUN_DNS_ADDRESS}"
+  fi
+fi
+
 export OVPN_PROTO OVPN_PORT OVPN_DEV OVPN_DNS OVPN_NETWORK OVPN_NETMASK OVPN_CIDR OVPN_SERVER_IP OVPN_MAX_CLIENTS OVPN_DUPLICATE_CN OVPN_CLIENT_TO_CLIENT OVPN_CLIENT_NAME OVPN_SERVER_ADDR
 export OVPN_CIPHER OVPN_DATA_CIPHERS OVPN_AUTH OVPN_VERB OVPN_DUPLICATE_CN_CONFIG OVPN_CLIENT_TO_CLIENT_CONFIG
 export PROXY_HOST PROXY_PORT PROXY_USER PROXY_PASS PROXY_UDP
-export MARK TABLE_ID TPROXY_PORT FULL_PROXY TPROXY_BACKEND SING_BOX_LOG_LEVEL DNS_SERVER DNS_SERVER_PORT DNS_PATH DNS_TLS_SERVER_NAME DNS_STRATEGY DNS_DETOUR DNSMASQ_ENABLED DNSMASQ_PORT DNSMASQ_UPSTREAM DNSMASQ_CACHE_SIZE DNSMASQ_LOG_QUERIES ENABLE_DIAGNOSTICS PROXY_CHECK_URL
+export TABLE_ID TABLE_PRIORITY MARK TPROXY_PORT TPROXY_BACKEND FULL_PROXY SING_BOX_LOG_LEVEL SING_TUN_NAME SING_TUN_ADDRESS SING_TUN_DNS_ADDRESS SING_TUN_MTU SING_TUN_STACK
+export DNS_SERVER DNS_SERVER_PORT DNS_PATH DNS_TLS_SERVER_NAME DNS_STRATEGY DNS_DETOUR DNSMASQ_ENABLED DNSMASQ_PORT DNSMASQ_UPSTREAM DNSMASQ_CACHE_SIZE DNSMASQ_LOG_QUERIES ENABLE_DIAGNOSTICS PROXY_CHECK_URL
 
 cleanup_legacy_rules
 
-if [ "${OVPN_DNS}" = "auto" ] || [ -z "${OVPN_DNS}" ]; then
-  OVPN_DNS="${OVPN_SERVER_IP}"
-  export OVPN_DNS
-fi
 if [ "${OVPN_DUPLICATE_CN}" = "1" ] || [ "${OVPN_DUPLICATE_CN}" = "true" ]; then
   OVPN_DUPLICATE_CN_CONFIG="duplicate-cn"
 else
@@ -119,7 +160,9 @@ SING_BOX_CONF=/etc/sing-box/config.json
 
 mkdir -p "$OPENVPN_DIR" "$CLIENTS_DIR" /etc/openvpn /etc/sing-box
 
-if [ ! -f "${OPENVPN_DIR}/server.conf.tpl" ]; then
+if [ "${OVPN_PRESERVE_TEMPLATE}" != "1" ] && [ "${OVPN_PRESERVE_TEMPLATE}" != "true" ]; then
+  cp /openvpn-defaults/server.conf.tpl "${OPENVPN_DIR}/server.conf.tpl"
+elif [ ! -f "${OPENVPN_DIR}/server.conf.tpl" ]; then
   cp /openvpn-defaults/server.conf.tpl "${OPENVPN_DIR}/server.conf.tpl"
 fi
 
@@ -204,7 +247,6 @@ if [ -n "$PROXY_USER" ] || [ -n "$PROXY_PASS" ]; then
 else
   envsubst < /sing-box/config.noauth.tpl.json > "$SING_BOX_CONF"
 fi
-envsubst < /nft/rules.nft.tpl > /tmp/rules.nft
 if [ "${DNSMASQ_ENABLED}" = "1" ] || [ "${DNSMASQ_ENABLED}" = "true" ]; then
   envsubst < /dnsmasq/dnsmasq.conf.tpl > /tmp/dnsmasq.conf
 fi
@@ -212,53 +254,48 @@ fi
 log "[4.1] generated sing-box config:"
 sed -E 's/("password"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"***"/; s/("username"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"***"/' "$SING_BOX_CONF" || true
 
-log "[5] enabling routing..."
-sysctl -w net.ipv4.ip_forward=1 >/dev/null || true
-sysctl -w net.ipv4.conf.all.route_localnet=1 >/dev/null || true
+log "[5] enabling kernel forwarding..."
+sysctl -w net.ipv4.ip_forward=1 >/dev/null || log "warning: failed to set net.ipv4.ip_forward; make sure host enables IPv4 forwarding"
 
-log "[6] loading transparent proxy rules..."
-if [ "${TPROXY_BACKEND}" = "nft" ]; then
-  if ! nft -f /tmp/rules.nft; then
-    log "nftables failed; set TPROXY_BACKEND=iptables or run container with --privileged if your host/kernel blocks nft"
-    exit 1
-  fi
-else
-  iptables -t mangle -N VPN_BOX_TPROXY 2>/dev/null || true
-  iptables -t mangle -F VPN_BOX_TPROXY
-  iptables -t mangle -C PREROUTING -j VPN_BOX_TPROXY 2>/dev/null || iptables -t mangle -A PREROUTING -j VPN_BOX_TPROXY
-  iptables -t mangle -A VPN_BOX_TPROXY -i "${OVPN_DEV}" -d "${OVPN_CIDR}" -j RETURN
-  if [ "${DNSMASQ_ENABLED}" = "1" ] || [ "${DNSMASQ_ENABLED}" = "true" ]; then
-    iptables -t mangle -A VPN_BOX_TPROXY -i "${OVPN_DEV}" -p tcp --dport "${DNSMASQ_PORT}" -j RETURN
-    iptables -t mangle -A VPN_BOX_TPROXY -i "${OVPN_DEV}" -p udp --dport "${DNSMASQ_PORT}" -j RETURN
-  fi
-  iptables -t mangle -A VPN_BOX_TPROXY -i "${OVPN_DEV}" -p tcp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}"
-  iptables -t mangle -A VPN_BOX_TPROXY -i "${OVPN_DEV}" -p udp -j TPROXY --on-port "${TPROXY_PORT}" --tproxy-mark "${MARK}/${MARK}"
-fi
-
-log "[7] configuring policy routing..."
-while ip rule del fwmark "${MARK}" table "${TABLE_ID}" 2>/dev/null; do :; done
-ip rule add fwmark "${MARK}" table "${TABLE_ID}"
-ip route replace local 0.0.0.0/0 dev lo table "${TABLE_ID}"
-
-if [ "${ENABLE_DIAGNOSTICS}" = "1" ] || [ "${ENABLE_DIAGNOSTICS}" = "true" ]; then
-  log "[diag] ip rule"; ip rule || true
-  log "[diag] route table ${TABLE_ID}"; ip route show table "${TABLE_ID}" || true
-  log "[diag] mangle PREROUTING"; iptables -t mangle -S PREROUTING || true
-  log "[diag] mangle VPN_BOX_TPROXY"; iptables -t mangle -S VPN_BOX_TPROXY || true
-  log "[diag] nat PREROUTING"; iptables -t nat -S PREROUTING || true
-fi
-
-log "[8] starting sing-box..."
+log "[6] starting sing-box TUN..."
 sing-box run -c "$SING_BOX_CONF" &
 SING_BOX_PID=$!
+if ! wait_interface "$SING_TUN_NAME" 20; then
+  log "sing-box TUN interface ${SING_TUN_NAME} was not created"
+  exit 1
+fi
 
+log "[7] starting openvpn..."
+openvpn --config "$SERVER_CONF" &
+OPENVPN_PID=$!
+if ! wait_ipv4 "$OVPN_DEV" "$OVPN_SERVER_IP" 30; then
+  log "OpenVPN interface ${OVPN_DEV} did not get ${OVPN_SERVER_IP}"
+  exit 1
+fi
+
+log "[8] configuring OpenVPN client policy route to sing-box TUN..."
+while ip rule del from "${OVPN_CIDR}" table "${TABLE_ID}" 2>/dev/null; do :; done
+ip route flush table "${TABLE_ID}" 2>/dev/null || true
+ip route replace "${OVPN_CIDR}" dev "${OVPN_DEV}" table "${TABLE_ID}"
+ip route replace default dev "${SING_TUN_NAME}" table "${TABLE_ID}"
+ip rule add from "${OVPN_CIDR}" table "${TABLE_ID}" priority "${TABLE_PRIORITY}"
+
+DNSMASQ_PID=""
 if [ "${DNSMASQ_ENABLED}" = "1" ] || [ "${DNSMASQ_ENABLED}" = "true" ]; then
-  log "[8.1] starting dnsmasq..."
+  log "[9] starting dnsmasq..."
   dnsmasq --no-daemon --conf-file=/tmp/dnsmasq.conf &
   DNSMASQ_PID=$!
 fi
 
 if [ "${ENABLE_DIAGNOSTICS}" = "1" ] || [ "${ENABLE_DIAGNOSTICS}" = "true" ]; then
+  log "[diag] ip addr ${SING_TUN_NAME}"; ip addr show dev "${SING_TUN_NAME}" || true
+  log "[diag] ip addr ${OVPN_DEV}"; ip addr show dev "${OVPN_DEV}" || true
+  log "[diag] ip rule"; ip rule || true
+  log "[diag] route table ${TABLE_ID}"; ip route show table "${TABLE_ID}" || true
+  log "[diag] main route for sing-box TUN"; ip route | grep "${SING_TUN_NAME}" || true
+  log "[diag] mangle PREROUTING"; iptables -t mangle -S PREROUTING || true
+  log "[diag] nat PREROUTING"; iptables -t nat -S PREROUTING || true
+  [ -f /tmp/dnsmasq.conf ] && { log "[diag] dnsmasq config"; cat /tmp/dnsmasq.conf; }
   (
     sleep 2
     log "[diag] checking SOCKS5 outbound via curl..."
@@ -270,12 +307,12 @@ if [ "${ENABLE_DIAGNOSTICS}" = "1" ] || [ "${ENABLE_DIAGNOSTICS}" = "true" ]; th
       --socks5-hostname "${PROXY_USER:+${PROXY_USER}:${PROXY_PASS}@}${PROXY_HOST}:${PROXY_PORT}" \
       -H 'accept: application/dns-json' \
       "https://${DNS_TLS_SERVER_NAME}${DNS_PATH}?name=example.com&type=A" || log "[diag] DoH over SOCKS5 check failed"
+    if [ "${DNSMASQ_ENABLED}" = "1" ] || [ "${DNSMASQ_ENABLED}" = "true" ]; then
+      log "[diag] checking dnsmasq query..."
+      nslookup example.com "${OVPN_SERVER_IP}" || log "[diag] dnsmasq query failed"
+    fi
   ) &
 fi
-
-log "[9] starting openvpn..."
-openvpn --config "$SERVER_CONF" &
-OPENVPN_PID=$!
 
 wait -n "$SING_BOX_PID" "$OPENVPN_PID" ${DNSMASQ_PID:+"$DNSMASQ_PID"}
 log "one process exited, stopping container..."

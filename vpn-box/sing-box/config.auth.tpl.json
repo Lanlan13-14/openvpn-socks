@@ -27,20 +27,17 @@
   },
   "inbounds": [
     {
-      "type": "tproxy",
-      "tag": "tproxy-in",
-      "listen": "0.0.0.0",
-      "listen_port": ${TPROXY_PORT},
-      "network": "tcp",
-      "sniff": true
-    },
-    {
-      "type": "tproxy",
-      "tag": "tproxy-in-udp",
-      "listen": "0.0.0.0",
-      "listen_port": ${TPROXY_PORT},
-      "network": "udp",
-      "sniff": true
+      "type": "tun",
+      "tag": "tun-in",
+      "interface_name": "${SING_TUN_NAME}",
+      "address": [
+        "${SING_TUN_ADDRESS}"
+      ],
+      "mtu": ${SING_TUN_MTU},
+      "auto_route": false,
+      "strict_route": false,
+      "stack": "${SING_TUN_STACK}",
+      "sniff": false
     }
   ],
   "outbounds": [
@@ -65,6 +62,7 @@
         "action": "hijack-dns"
       }
     ],
-    "final": "proxy"
+    "final": "proxy",
+    "auto_detect_interface": true
   }
 }

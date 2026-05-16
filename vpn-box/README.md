@@ -1,6 +1,6 @@
 # ovpn-socks-out
 
-单容器 OpenVPN Server + sing-box TProxy + SOCKS5 outbound 镜像。
+单容器 OpenVPN Server + sing-box TUN + SOCKS5 outbound 镜像。
 
 镜像名：`ghcr.io/lanlan13-14/ovpn-socks-out`
 
@@ -8,40 +8,30 @@
 
 ```text
 OpenVPN client
-  -> OpenVPN Server inside container
-  -> client DNS points to OpenVPN gateway
-  -> sing-box DNS remote resolver via SOCKS5
-  -> nftables TPROXY
-  -> sing-box tproxy inbound
-  -> upstream SOCKS5 outbound
+  -> OpenVPN Server inside container, interface ovpn0
+  -> policy route from OpenVPN CIDR
+  -> sing-box TUN interface sb-tun0
+  -> SOCKS5 outbound
 ```
 
-
-## 目录
+DNS 默认链路：
 
 ```text
-vpn-box/
-├── Dockerfile
-├── docker-compose.yml
-├── entrypoint.sh
-├── openvpn/
-│   └── server.conf.tpl
-├── sing-box/
-│   ├── config.auth.tpl.json
-│   └── config.noauth.tpl.json
-├── nft/
-│   └── rules.nft.tpl
-└── env/
-    ├── openvpn.env
-    ├── proxy.env
-    └── runtime.env
+OpenVPN client DNS
+  -> OpenVPN gateway 10.8.0.1:53
+  -> dnsmasq cache
+  -> sing-box TUN DNS address 172.19.0.2:53
+  -> sing-box DNS hijack
+  -> Cloudflare DoH
+  -> SOCKS5 outbound
 ```
+
+本镜像不再默认使用 TPROXY/nft 作为 datapath。
 
 ## 使用
 
 ```bash
 cd vpn-box
-
 docker compose up -d --build
 ```
 
@@ -60,73 +50,45 @@ openvpn/
 ./openvpn/clients/client.ovpn
 ```
 
-如果需要指定客户端名称：
-
-```bash
-docker run ... -e OVPN_CLIENT_NAME=phone ...
-```
-
-则生成：
-
-```text
-./openvpn/clients/phone.ovpn
-```
-
-如果需要让多个设备直接复用同一个 `.ovpn` 文件，可设置：
+多个设备复用同一个 `.ovpn`：
 
 ```bash
 -e OVPN_DUPLICATE_CN=1
 ```
 
-该模式会在 OpenVPN 服务端开启 `duplicate-cn`，方便多个设备使用同一客户端证书同时连接。
-
 ## docker run 示例
 
-无认证 SOCKS5：
-
 ```bash
 docker run -d \
-  --name vpn-box \
+  --name ovpn-socks-out \
   --network host \
   --cap-add NET_ADMIN \
   --cap-add SYS_MODULE \
   --device /dev/net/tun \
-  -v "$PWD/openvpn:/openvpn" \
-  -e PROXY_HOST=1.2.3.4 \
-  -e PROXY_PORT=1080 \
+  -v /root/ovpn:/openvpn \
+  -e OVPN_PROTO=tcp \
+  -e OVPN_PORT=18383 \
+  -e OVPN_DEV=ovpn0 \
+  -e OVPN_SERVER_ADDR=139.162.1.152 \
+  -e OVPN_DUPLICATE_CN=1 \
+  -e PROXY_HOST=116.251.216.36 \
+  -e PROXY_PORT=12240 \
+  -e PROXY_USER='user' \
+  -e PROXY_PASS='pass' \
   -e PROXY_UDP=true \
-  -e DNS_STRATEGY=prefer_ipv4 \
   -e DNS_SERVER=1.1.1.1 \
+  -e DNS_SERVER_PORT=443 \
+  -e DNS_PATH=/dns-query \
   -e DNS_TLS_SERVER_NAME=cloudflare-dns.com \
   -e DNS_DETOUR=proxy \
-  -e DNS_PATH=/dns-query \
-  -e OVPN_DEV=ovpn0 \
+  -e DNS_STRATEGY=prefer_ipv4 \
+  -e DNSMASQ_ENABLED=1 \
+  -e SING_BOX_LOG_LEVEL=warning \
+  --restart unless-stopped \
   ghcr.io/lanlan13-14/ovpn-socks-out:latest
 ```
 
-有认证 SOCKS5：
-
-```bash
-docker run -d \
-  --name vpn-box \
-  --network host \
-  --cap-add NET_ADMIN \
-  --cap-add SYS_MODULE \
-  --device /dev/net/tun \
-  -v "$PWD/openvpn:/openvpn" \
-  -e PROXY_HOST=1.2.3.4 \
-  -e PROXY_PORT=1080 \
-  -e PROXY_USER=user \
-  -e PROXY_PASS=pass \
-  -e PROXY_UDP=true \
-  -e DNS_STRATEGY=prefer_ipv4 \
-  -e DNS_SERVER=1.1.1.1 \
-  -e DNS_TLS_SERVER_NAME=cloudflare-dns.com \
-  -e DNS_DETOUR=proxy \
-  -e DNS_PATH=/dns-query \
-  -e OVPN_DEV=ovpn0 \
-  ghcr.io/lanlan13-14/ovpn-socks-out:latest
-```
+无认证 SOCKS5 时去掉 `PROXY_USER` / `PROXY_PASS`。
 
 ## 环境变量
 
@@ -138,21 +100,35 @@ docker run -d \
 | --- | --- | --- |
 | `OVPN_PROTO` | `udp` | OpenVPN 协议 |
 | `OVPN_PORT` | `1194` | OpenVPN 端口 |
-| `OVPN_DEV` | `ovpn0` | OpenVPN 服务端 tun 设备名；模板使用 `dev-type tun`，因此这里可用 `ovpn0` 避免 host network 下 `tun0` 冲突 |
-| `OVPN_DNS` | `auto` | 推送给客户端的 DNS；`auto` 表示使用 `OVPN_SERVER_IP`，即 OpenVPN 网段网关 |
+| `OVPN_DEV` | `ovpn0` | OpenVPN 服务端 tun 设备名 |
+| `OVPN_DNS` | `auto` | 推送给客户端的 DNS；默认使用 `OVPN_SERVER_IP` |
 | `OVPN_NETWORK` | `10.8.0.0` | VPN 网段 |
 | `OVPN_NETMASK` | `255.255.255.0` | VPN 掩码 |
-| `OVPN_CIDR` | `10.8.0.0/24` | nft 排除的 VPN CIDR |
-| `OVPN_SERVER_IP` | `10.8.0.1` | OpenVPN 网段网关，也是默认 DNS 地址 |
+| `OVPN_CIDR` | `10.8.0.0/24` | VPN CIDR，用于策略路由 |
+| `OVPN_SERVER_IP` | `10.8.0.1` | OpenVPN 网段网关 |
 | `OVPN_MAX_CLIENTS` | `1024` | 最大客户端数量 |
-| `OVPN_DUPLICATE_CN` | `0` | 保留变量；设置为 `1` 时用于允许多个设备复用同一客户端证书 |
-| `OVPN_CLIENT_TO_CLIENT` | `0` | 保留变量；客户端互通开关 |
+| `OVPN_DUPLICATE_CN` | `0` | 设为 `1` 允许多个设备复用同一客户端证书 |
+| `OVPN_CLIENT_TO_CLIENT` | `0` | 客户端互通开关 |
 | `OVPN_CLIENT_NAME` | `client` | 自动生成的客户端名称 |
 | `OVPN_SERVER_ADDR` | 自动公网 IP | 写入客户端配置的服务端地址 |
 | `OVPN_CIPHER` | `AES-128-GCM` | fallback cipher |
 | `OVPN_DATA_CIPHERS` | `AES-128-GCM:AES-256-GCM:CHACHA20-POLY1305` | DCO 友好的 AEAD cipher 列表 |
 | `OVPN_AUTH` | `SHA256` | auth digest |
 | `OVPN_VERB` | `3` | OpenVPN 日志级别 |
+| `OVPN_PRESERVE_TEMPLATE` | `0` | 默认覆盖挂载目录旧 `server.conf.tpl`，设为 `1` 保留用户自定义模板 |
+
+### sing-box TUN / 路由
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `TPROXY_BACKEND` | `tun` | 保留兼容变量；当前默认 datapath 为 sing-box TUN |
+| `TABLE_ID` | `100` | OpenVPN CIDR 策略路由表 |
+| `TABLE_PRIORITY` | `10000` | 策略路由优先级 |
+| `SING_TUN_NAME` | `sb-tun0` | sing-box TUN 接口名 |
+| `SING_TUN_ADDRESS` | `172.19.0.1/30` | sing-box TUN 地址 |
+| `SING_TUN_DNS_ADDRESS` | `172.19.0.2` | sing-box TUN DNS 劫持地址 |
+| `SING_TUN_MTU` | `1500` | sing-box TUN MTU |
+| `SING_TUN_STACK` | `mixed` | sing-box TUN stack：`system`、`gvisor`、`mixed` |
 
 ### SOCKS5 outbound
 
@@ -164,56 +140,33 @@ docker run -d \
 | `PROXY_PASS` | 空 | 上游 SOCKS5 密码 |
 | `PROXY_UDP` | `true` | sing-box `udp_over_tcp` |
 
-当 `PROXY_USER` 或 `PROXY_PASS` 任一非空时，入口脚本使用 `config.auth.tpl.json`；否则使用 `config.noauth.tpl.json`。
-
-## DNS 远程解析
-
-默认 `OVPN_DNS=auto`，OpenVPN 会向客户端推送 OpenVPN 网段网关 `OVPN_SERVER_IP` 作为 DNS。容器内默认启用 dnsmasq 监听 `OVPN_SERVER_IP:53`，为客户端 DNS 提供缓存和合并转发，降低移动端高并发 DNS 查询直接打到 SOCKS5 UoT 的压力；dnsmasq 上游默认转发到 `127.0.0.1:${TPROXY_PORT}`，再进入 sing-box tproxy inbound。sing-box tproxy inbound 开启 `sniff`，识别 `protocol=dns` 后使用 `hijack-dns` 交给 DNS 模块，再通过新 DNS server 格式的 DoH 服务器 `DNS_SERVER` + `DNS_PATH` 发起远程解析。默认使用 `DNS_SERVER=1.1.1.1` 和 `DNS_TLS_SERVER_NAME=cloudflare-dns.com`，避免 DoH 服务器域名解析引导循环。默认 `DNS_DETOUR=proxy`，即 DNS 查询也走 SOCKS5；如需排查上游容量问题可临时设置 `DNS_DETOUR=direct`。
-
-可通过 `DNS_STRATEGY` 控制查询结果偏好：
-
-```bash
--e DNS_STRATEGY=prefer_ipv4
--e DNS_STRATEGY=prefer_ipv6
--e DNS_STRATEGY=ipv4_only
--e DNS_STRATEGY=ipv6_only
-```
-
-### Runtime
+### DNS
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `MARK` | `1` | TPROXY fwmark |
-| `TABLE_ID` | `100` | 策略路由表 |
-| `TPROXY_PORT` | `7893` | sing-box tproxy 监听端口 |
-| `TPROXY_BACKEND` | `iptables` | 透明代理规则后端：默认 `iptables`，可改为 `nft` |
-| `FULL_PROXY` | `1` | 保留变量，默认全代理 |
-| `SING_BOX_LOG_LEVEL` | `warning` | sing-box 日志级别 |
-| `DNS_SERVER` | `1.1.1.1` | 远程 DoH DNS 服务器地址；默认用 Cloudflare IP，避免解析 DoH 域名时发生引导循环 |
+| `DNS_SERVER` | `1.1.1.1` | 远程 DoH DNS 服务器地址 |
 | `DNS_SERVER_PORT` | `443` | 远程 DoH DNS 端口 |
 | `DNS_PATH` | `/dns-query` | 远程 DoH DNS 路径 |
 | `DNS_TLS_SERVER_NAME` | `cloudflare-dns.com` | DoH TLS SNI / 证书域名 |
-| `DNS_DETOUR` | `proxy` | DNS 服务器连接方式：默认 `proxy`，即 DoH 查询也走 SOCKS5；可设为 `direct` 让 DoH 直连 |
-| `DNS_STRATEGY` | `prefer_ipv4` | DNS 结果策略：`prefer_ipv4`、`prefer_ipv6`、`ipv4_only`、`ipv6_only` |
-| `DNS_LISTEN` | `127.0.0.1` | sing-box 本地 DNS 接收地址 |
-| `DNS_PORT` | `1053` | 保留变量，当前 DNS 通过 TPROXY/hijack-dns 处理 |
-| `DNSMASQ_ENABLED` | `1` | 启用 dnsmasq 作为客户端 DNS 缓存/转发层，减少客户端直接高并发打到 SOCKS5 UoT |
+| `DNS_DETOUR` | `proxy` | DoH 查询出站：`proxy` 走 SOCKS5，`direct` 直连 |
+| `DNS_STRATEGY` | `prefer_ipv4` | `prefer_ipv4`、`prefer_ipv6`、`ipv4_only`、`ipv6_only` |
+| `DNSMASQ_ENABLED` | `1` | 启用 dnsmasq 作为客户端 DNS 缓存层 |
 | `DNSMASQ_PORT` | `53` | dnsmasq 监听端口 |
-| `DNSMASQ_UPSTREAM` | `127.0.0.1#7893` | dnsmasq 上游，默认转发到 sing-box tproxy 端口再由 hijack-dns 处理 |
+| `DNSMASQ_UPSTREAM` | `172.19.0.2#53` | dnsmasq 上游，默认 sing-box TUN DNS 地址 |
 | `DNSMASQ_CACHE_SIZE` | `4096` | dnsmasq 缓存条目数 |
 | `DNSMASQ_LOG_QUERIES` | `0` | dnsmasq 查询日志开关 |
-| `ENABLE_DIAGNOSTICS` | `0` | 设置为 `1` 时启动时打印 sing-box 配置、ip rule、策略路由、iptables 规则，并用 curl 检测 SOCKS5/DoH 出站连通性 |
-| `PROXY_CHECK_URL` | `https://www.cloudflare.com/cdn-cgi/trace` | 诊断模式下用于测试 SOCKS5 TCP 出站的 URL |
+
+### 诊断
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `SING_BOX_LOG_LEVEL` | `warning` | sing-box 日志级别 |
+| `ENABLE_DIAGNOSTICS` | `0` | 设为 `1` 打印 sing-box 配置、接口、策略路由、iptables 规则并做 SOCKS/DoH 检测 |
+| `PROXY_CHECK_URL` | `https://www.cloudflare.com/cdn-cgi/trace` | 诊断模式下测试 SOCKS5 TCP 出站的 URL |
 
 ## OpenVPN DCO
 
-OpenVPN 2.6 会在配置和宿主机内核支持时机会性使用 DCO。DCO 需要：
-
-- 宿主机支持并加载 `ovpn-dco` 内核模块；
-- 使用 AEAD cipher，例如 `AES-128-GCM`、`AES-256-GCM`、`CHACHA20-POLY1305`；
-- 不使用压缩等 DCO 不支持的配置。
-
-容器无法替宿主机安装或加载内核模块。宿主机可尝试：
+OpenVPN 2.6 会在配置和宿主机内核支持时机会性使用 DCO。DCO 需要宿主机支持并加载 `ovpn-dco` 内核模块。
 
 ```bash
 modprobe ovpn-dco
@@ -223,7 +176,6 @@ modprobe ovpn-dco
 
 - 推荐 `network_mode: host` / `--network host`。
 - 需要 `NET_ADMIN` 和 `/dev/net/tun`。
-- 默认 `OVPN_DEV=ovpn0`，避免 host network 下与宿主机或残留 OpenVPN 的 `tun0` 冲突；如果确实需要可用 `-e OVPN_DEV=xxx` 自定义。
-- 默认使用 iptables TPROXY，避免部分 Alpine/nftables/宿主机组合下 `nft -f` 崩溃；如需 nft，可设置 `TPROXY_BACKEND=nft`。
-- 上游 SOCKS5 必须支持 UDP，否则 UDP 业务不可用。
-- Docker daemon 如需完全避免网络规则干预，可在宿主机 Docker 配置中设置 `iptables: false`，这不是容器内配置。
+- 当前 datapath 是 sing-box TUN：`OpenVPN ovpn0 -> ip rule from OVPN_CIDR -> sb-tun0 -> SOCKS5`。
+- 容器启动会清理旧版 vpn-box 遗留的 TPROXY / DNS REDIRECT / fwmark 规则。
+- 如果挂载目录已有旧 `server.conf.tpl`，默认会覆盖为镜像内新模板；如需保留自定义模板，设置 `OVPN_PRESERVE_TEMPLATE=1`。

@@ -230,8 +230,8 @@ docker logs ovpn-socks5
 ```text
 OpenVPN Client
   -> OpenVPN Server inside vpn-box
-  -> nftables TPROXY
-  -> sing-box tproxy inbound
+  -> policy route from OpenVPN CIDR
+  -> sing-box TUN inbound
   -> upstream SOCKS5 outbound
 ```
 
@@ -240,7 +240,8 @@ OpenVPN Client
 - 单容器完成 datapath；
 - 内置 OpenVPN Server；
 - 内置 sing-box 1.12，固定版本构建；
-- OpenVPN 客户端 DNS 默认指向 OpenVPN 网段网关，DNS 查询由 sing-box 通过 SOCKS5 outbound 远程解析；
+- 默认使用 sing-box TUN 虚拟网卡，不再依赖 TPROXY/nft 作为主 datapath；
+- OpenVPN 客户端 DNS 默认指向 OpenVPN 网段网关，dnsmasq 缓存后交给 sing-box DNS，通过 SOCKS5 outbound 远程解析；
 - 支持 `DNS_STRATEGY=prefer_ipv4|prefer_ipv6|ipv4_only|ipv6_only`；
 - 支持上游 SOCKS5 有认证和无认证两份 sing-box 配置模板；
 - 首次启动会在挂载的 `/openvpn` 目录自动生成 PKI 和客户端 `.ovpn` 文件；
