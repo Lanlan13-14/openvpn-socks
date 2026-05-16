@@ -45,6 +45,7 @@ def build_dns_server():
         'tag': 'remote',
         'server': env('DNS_SERVER', '1.1.1.1'),
         'server_port': maybe_int(env('DNS_SERVER_PORT'), dns_server_defaults(server_type)),
+        'detour': env('DNS_DETOUR', 'proxy'),
     }
     if server_type in {'tls', 'quic', 'https', 'h3'}:
         tls = build_tls('DNS')
