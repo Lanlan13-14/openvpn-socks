@@ -318,6 +318,11 @@ if [ "${ENABLE_DIAGNOSTICS}" = "1" ] || [ "${ENABLE_DIAGNOSTICS}" = "true" ]; th
   log "[diag] ip addr ${OVPN_DEV}"; ip addr show dev "${OVPN_DEV}" || true
   log "[diag] ip rule"; ip rule || true
   log "[diag] route table ${TABLE_ID}"; ip route show table "${TABLE_ID}" || true
+  if [ "${IPV6_ENABLED}" = "1" ] || [ "${IPV6_ENABLED}" = "true" ]; then
+    log "[diag] ip -6 rule"; ip -6 rule || true
+    log "[diag] IPv6 route table ${TABLE_ID}"; ip -6 route show table "${TABLE_ID}" || true
+    log "[diag] IPv6 forwarding"; sysctl net.ipv6.conf.all.forwarding net.ipv6.conf.default.forwarding 2>/dev/null || true
+  fi
   log "[diag] main route for sing-box TUN"; ip route | grep "${SING_TUN_NAME}" || true
   log "[diag] mangle PREROUTING"; iptables -t mangle -S PREROUTING || true
   log "[diag] nat PREROUTING"; iptables -t nat -S PREROUTING || true
@@ -335,6 +340,19 @@ if [ "${ENABLE_DIAGNOSTICS}" = "1" ] || [ "${ENABLE_DIAGNOSTICS}" = "true" ]; th
           "${PROXY_CHECK_URL}" || log "[diag] SOCKS5 outbound check failed"
         ;;
     esac
+    if [ "${IPV6_ENABLED}" = "1" ] || [ "${IPV6_ENABLED}" = "true" ]; then
+      log "[diag] checking IPv6 outbound via proxy..."
+      case "${PROXY_TYPE}" in
+        anytls)
+          curl -6 -fsS --connect-timeout 5 --max-time 12 "https://ifconfig.co/ip" || log "[diag] IPv6 outbound check failed"
+          ;;
+        *)
+          curl -6 -fsS --connect-timeout 5 --max-time 12 \
+            --socks5-hostname "${PROXY_USER:+${PROXY_USER}:${PROXY_PASS}@}${PROXY_HOST}:${PROXY_PORT}" \
+            "https://ifconfig.co/ip" || log "[diag] IPv6 outbound check failed"
+          ;;
+      esac
+    fi
     if [ "${DNSMASQ_ENABLED}" = "1" ] || [ "${DNSMASQ_ENABLED}" = "true" ]; then
       log "[diag] checking dnsmasq query..."
       nslookup example.com "${OVPN_SERVER_IP}" || log "[diag] dnsmasq query failed"

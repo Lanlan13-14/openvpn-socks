@@ -271,16 +271,37 @@ docker run -d \
 
 1. 容器使用 `--network bridge`，不要用 `host`。
 2. 通过 `-p` 把 OpenVPN 端口映射到宿主机 LAN 口可达地址。
-3. 把 `OVPN_SERVER_ADDR` 设置为 `br-lan` 对应的 LAN IPv4 地址。
-4. 确保路由器防火墙允许 `OVPN_PORT` 从 LAN 侧入站。
-5. 如果宿主机本身就是网关，`dnsmasq` 仍然可以正常做客户端 DNS 缓存层。
-6. 其他 OpenVPN / sing-box 环境变量保持不变。
+3. 如果开启 `IPV6_ENABLED=1`，建议给容器增加 `--sysctl net.ipv6.conf.all.forwarding=1` 和 `--sysctl net.ipv6.conf.default.forwarding=1`。
+4. 把 `OVPN_SERVER_ADDR` 设置为 `br-lan` 对应的 LAN IPv4 地址。
+5. 确保路由器防火墙允许 `OVPN_PORT` 从 LAN 侧入站。
+6. 如果宿主机本身就是网关，`dnsmasq` 仍然可以正常做客户端 DNS 缓存层。
+7. 其他 OpenVPN / sing-box 环境变量保持不变。
 
 示例：
 
 ```bash
-docker run -d   --name openvpn-out   --network bridge   -p 1194:1194/udp   --cap-add NET_ADMIN   --cap-add SYS_MODULE   --device /dev/net/tun   -v /root/openvpn-out:/openvpn   -e OVPN_SERVER_ADDR=192.168.1.1   -e OVPN_PORT=1194   -e PROXY_TYPE=shadowsocks   -e PROXY_HOST=proxy.example.com   -e PROXY_PORT=8388   -e PROXY_METHOD=2022-blake3-aes-128-gcm   -e PROXY_PASSWORD='your-password'   ghcr.io/lanlan13-14/openvpn-out:latest
+docker run -d \
+  --name openvpn-out \
+  --network bridge \
+  -p 1194:1194/udp \
+  --sysctl net.ipv6.conf.all.forwarding=1 \
+  --sysctl net.ipv6.conf.default.forwarding=1 \
+  --cap-add NET_ADMIN \
+  --cap-add SYS_MODULE \
+  --device /dev/net/tun \
+  -v /root/openvpn-out:/openvpn \
+  -e OVPN_SERVER_ADDR=192.168.1.1 \
+  -e OVPN_PORT=1194 \
+  -e IPV6_ENABLED=1 \
+  -e OVPN_IPV6_CIDR=fd42:42:42:42::/64 \
+  -e PROXY_TYPE=shadowsocks \
+  -e PROXY_HOST=proxy.example.com \
+  -e PROXY_PORT=8388 \
+  -e PROXY_METHOD=2022-blake3-aes-128-gcm \
+  -e PROXY_PASSWORD='your-password' \
+  ghcr.io/lanlan13-14/openvpn-out:latest
 ```
+
 
 OpenVPN 2.6 会在配置和宿主机内核支持时机会性使用 DCO。DCO 需要宿主机支持并加载 `ovpn-dco` 内核模块。
 
