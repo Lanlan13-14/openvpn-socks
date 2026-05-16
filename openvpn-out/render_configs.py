@@ -137,6 +137,10 @@ def build_proxy_outbound():
 
 
 def build_config():
+    tun_address = [env('SING_TUN_ADDRESS', '172.19.0.1/30')]
+    if truthy(env('IPV6_ENABLED')):
+        tun_address.append(env('SING_TUN_ADDRESS6', 'fd42:42:42:43::1/126'))
+
     return {
         'log': {'level': env('SING_BOX_LOG_LEVEL', 'warning')},
         'dns': {
@@ -155,7 +159,7 @@ def build_config():
                 'type': 'tun',
                 'tag': 'tun-in',
                 'interface_name': env('SING_TUN_NAME', 'sb-tun0'),
-                'address': [env('SING_TUN_ADDRESS', '172.19.0.1/30')],
+                'address': tun_address,
                 'mtu': maybe_int(env('SING_TUN_MTU'), 1500),
                 'auto_route': False,
                 'strict_route': False,

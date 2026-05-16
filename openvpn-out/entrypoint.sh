@@ -89,6 +89,8 @@ load_env_file /env/runtime.env
 : "${OVPN_AUTH:=SHA256}"
 : "${OVPN_VERB:=3}"
 : "${OVPN_PRESERVE_TEMPLATE:=0}"
+: "${IPV6_ENABLED:=0}"
+: "${OVPN_IPV6_CIDR:=fd42:42:42:42::/64}"
 
 : "${PROXY_TYPE:=socks}"
 : "${PROXY_HOST:?missing PROXY_HOST}"
@@ -111,6 +113,7 @@ load_env_file /env/runtime.env
 : "${SING_BOX_LOG_LEVEL:=warning}"
 : "${SING_TUN_NAME:=sb-tun0}"
 : "${SING_TUN_ADDRESS:=172.19.0.1/30}"
+: "${SING_TUN_ADDRESS6:=fd42:42:42:43::1/126}"
 : "${SING_TUN_DNS_ADDRESS:=172.19.0.2}"
 : "${SING_TUN_MTU:=1500}"
 : "${SING_TUN_STACK:=mixed}"
@@ -140,9 +143,9 @@ if [ "${OVPN_DNS}" = "auto" ] || [ -z "${OVPN_DNS}" ]; then
 fi
 
 export OVPN_PROTO OVPN_PORT OVPN_DEV OVPN_DNS OVPN_NETWORK OVPN_NETMASK OVPN_CIDR OVPN_SERVER_IP OVPN_MAX_CLIENTS OVPN_DUPLICATE_CN OVPN_CLIENT_TO_CLIENT OVPN_CLIENT_NAME OVPN_SERVER_ADDR
-export OVPN_CIPHER OVPN_DATA_CIPHERS OVPN_AUTH OVPN_VERB OVPN_DUPLICATE_CN_CONFIG OVPN_CLIENT_TO_CLIENT_CONFIG OVPN_PRESERVE_TEMPLATE
+export OVPN_CIPHER OVPN_DATA_CIPHERS OVPN_AUTH OVPN_VERB OVPN_DUPLICATE_CN_CONFIG OVPN_CLIENT_TO_CLIENT_CONFIG OVPN_PRESERVE_TEMPLATE IPV6_ENABLED OVPN_IPV6_CIDR OVPN_IPV6_CONFIG
 export PROXY_TYPE PROXY_HOST PROXY_PORT PROXY_USER PROXY_PASS PROXY_PASSWORD PROXY_METHOD PROXY_UDP PROXY_TLS_SERVER_NAME PROXY_TLS_INSECURE PROXY_TLS_ALPN
-export TABLE_ID TABLE_PRIORITY MARK TPROXY_PORT TPROXY_BACKEND FULL_PROXY SING_BOX_LOG_LEVEL SING_TUN_NAME SING_TUN_ADDRESS SING_TUN_DNS_ADDRESS SING_TUN_MTU SING_TUN_STACK
+export TABLE_ID TABLE_PRIORITY MARK TPROXY_PORT TPROXY_BACKEND FULL_PROXY SING_BOX_LOG_LEVEL SING_TUN_NAME SING_TUN_ADDRESS SING_TUN_ADDRESS6 SING_TUN_DNS_ADDRESS SING_TUN_MTU SING_TUN_STACK
 export DNS_SERVER_TYPE DNS_SERVER DNS_SERVER_PORT DNS_PATH DNS_TLS_SERVER_NAME DNS_TLS_INSECURE DNS_TLS_ALPN DNS_STRATEGY DNS_DETOUR DNSMASQ_ENABLED DNSMASQ_PORT DNSMASQ_UPSTREAM DNSMASQ_CACHE_SIZE DNSMASQ_LOG_QUERIES ENABLE_DIAGNOSTICS PROXY_CHECK_URL
 
 cleanup_legacy_rules
@@ -157,7 +160,13 @@ if [ "${OVPN_CLIENT_TO_CLIENT}" = "1" ] || [ "${OVPN_CLIENT_TO_CLIENT}" = "true"
 else
   OVPN_CLIENT_TO_CLIENT_CONFIG=""
 fi
-export OVPN_DUPLICATE_CN_CONFIG OVPN_CLIENT_TO_CLIENT_CONFIG
+if [ "${IPV6_ENABLED}" = "1" ] || [ "${IPV6_ENABLED}" = "true" ]; then
+  OVPN_IPV6_CONFIG="server-ipv6 ${OVPN_IPV6_CIDR}
+push \"redirect-gateway ipv6\""
+else
+  OVPN_IPV6_CONFIG=""
+fi
+export OVPN_DUPLICATE_CN_CONFIG OVPN_CLIENT_TO_CLIENT_CONFIG OVPN_IPV6_CONFIG
 
 OPENVPN_DIR=/openvpn
 PKI_DIR="${OPENVPN_DIR}/pki"
@@ -263,6 +272,9 @@ sed 's/^/  /' "$SERVER_CONF" || true
 
 log "[6] enabling kernel forwarding..."
 sysctl -w net.ipv4.ip_forward=1 >/dev/null || log "warning: failed to set net.ipv4.ip_forward; make sure host enables IPv4 forwarding"
+if [ "${IPV6_ENABLED}" = "1" ] || [ "${IPV6_ENABLED}" = "true" ]; then
+  sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null || log "warning: failed to set net.ipv6.conf.all.forwarding; make sure host enables IPv6 forwarding"
+fi
 
 log "[7] starting sing-box TUN..."
 sing-box run -c "$SING_BOX_CONF" &
@@ -286,6 +298,13 @@ ip route flush table "${TABLE_ID}" 2>/dev/null || true
 ip route replace "${OVPN_CIDR}" dev "${OVPN_DEV}" table "${TABLE_ID}"
 ip route replace default dev "${SING_TUN_NAME}" table "${TABLE_ID}"
 ip rule add from "${OVPN_CIDR}" table "${TABLE_ID}" priority "${TABLE_PRIORITY}"
+if [ "${IPV6_ENABLED}" = "1" ] || [ "${IPV6_ENABLED}" = "true" ]; then
+  while ip -6 rule del from "${OVPN_IPV6_CIDR}" table "${TABLE_ID}" 2>/dev/null; do :; done
+  ip -6 route flush table "${TABLE_ID}" 2>/dev/null || true
+  ip -6 route replace "${OVPN_IPV6_CIDR}" dev "${OVPN_DEV}" table "${TABLE_ID}"
+  ip -6 route replace default dev "${SING_TUN_NAME}" table "${TABLE_ID}"
+  ip -6 rule add from "${OVPN_IPV6_CIDR}" table "${TABLE_ID}" priority "${TABLE_PRIORITY}"
+fi
 
 DNSMASQ_PID=""
 if [ "${DNSMASQ_ENABLED}" = "1" ] || [ "${DNSMASQ_ENABLED}" = "true" ]; then

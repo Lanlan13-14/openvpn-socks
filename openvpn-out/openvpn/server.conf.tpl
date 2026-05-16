@@ -5,6 +5,7 @@ dev-type tun
 topology subnet
 
 server ${OVPN_NETWORK} ${OVPN_NETMASK}
+${OVPN_IPV6_CONFIG}
 
 ca /openvpn/pki/ca.crt
 cert /openvpn/pki/issued/server.crt

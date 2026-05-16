@@ -83,6 +83,8 @@ docker run -d \
   -e DNS_DETOUR=proxy \
   -e DNS_STRATEGY=prefer_ipv4 \
   -e DNSMASQ_ENABLED=1 \
+  -e IPV6_ENABLED=1 \
+  -e OVPN_IPV6_CIDR=fd42:42:42:42::/64 \
   -e SING_BOX_LOG_LEVEL=warning \
   --restart unless-stopped \
   ghcr.io/lanlan13-14/openvpn-out:latest
@@ -200,6 +202,8 @@ docker run -d \
 | `OVPN_AUTH` | `SHA256` | auth digest |
 | `OVPN_VERB` | `3` | OpenVPN 日志级别 |
 | `OVPN_PRESERVE_TEMPLATE` | `0` | 默认覆盖挂载目录旧 `server.conf.tpl`，设为 `1` 保留用户自定义模板 |
+| `IPV6_ENABLED` | `0` | IPv6 开关；设为 `1` 时启用 OpenVPN IPv6 地址池、sing-box TUN IPv6 地址和 IPv6 策略路由 |
+| `OVPN_IPV6_CIDR` | `fd42:42:42:42::/64` | OpenVPN IPv6 ULA 地址池 |
 
 ### sing-box TUN / 路由
 
@@ -220,7 +224,8 @@ docker run -d \
 | `TABLE_ID` | `100` | OpenVPN CIDR 策略路由表 |
 | `TABLE_PRIORITY` | `10000` | 策略路由优先级 |
 | `SING_TUN_NAME` | `sb-tun0` | sing-box TUN 接口名 |
-| `SING_TUN_ADDRESS` | `172.19.0.1/30` | sing-box TUN 地址 |
+| `SING_TUN_ADDRESS` | `172.19.0.1/30` | sing-box TUN IPv4 地址 |
+| `SING_TUN_ADDRESS6` | `fd42:42:42:43::1/126` | sing-box TUN IPv6 地址，`IPV6_ENABLED=1` 时生效 |
 | `SING_TUN_DNS_ADDRESS` | `172.19.0.2` | sing-box TUN DNS 劫持地址 |
 | `SING_TUN_MTU` | `1500` | sing-box TUN MTU |
 | `SING_TUN_STACK` | `mixed` | sing-box TUN stack：`system`、`gvisor`、`mixed` |
