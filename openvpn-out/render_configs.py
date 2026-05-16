@@ -160,7 +160,7 @@ def build_config():
                 'tag': 'tun-in',
                 'interface_name': env('SING_TUN_NAME', 'sb-tun0'),
                 'address': tun_address,
-                'mtu': maybe_int(env('SING_TUN_MTU'), 1500),
+                'mtu': maybe_int(env('SING_TUN_MTU'), 9000),
                 'auto_route': False,
                 'strict_route': False,
                 'stack': env('SING_TUN_STACK', 'mixed'),

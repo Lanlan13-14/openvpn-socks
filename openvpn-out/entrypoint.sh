@@ -115,7 +115,7 @@ load_env_file /env/runtime.env
 : "${SING_TUN_ADDRESS:=172.19.0.1/30}"
 : "${SING_TUN_ADDRESS6:=fd42:42:42:43::1/126}"
 : "${SING_TUN_DNS_ADDRESS:=172.19.0.2}"
-: "${SING_TUN_MTU:=1500}"
+: "${SING_TUN_MTU:=9000}"
 : "${SING_TUN_STACK:=mixed}"
 : "${DNS_SERVER_TYPE:=https}"
 : "${DNS_SERVER:=1.1.1.1}"

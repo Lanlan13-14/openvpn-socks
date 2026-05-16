@@ -227,7 +227,7 @@ docker run -d \
 | `SING_TUN_ADDRESS` | `172.19.0.1/30` | sing-box TUN IPv4 地址 |
 | `SING_TUN_ADDRESS6` | `fd42:42:42:43::1/126` | sing-box TUN IPv6 地址，`IPV6_ENABLED=1` 时生效 |
 | `SING_TUN_DNS_ADDRESS` | `172.19.0.2` | sing-box TUN DNS 劫持地址 |
-| `SING_TUN_MTU` | `1500` | sing-box TUN MTU |
+| `SING_TUN_MTU` | `9000` | sing-box TUN MTU |
 | `SING_TUN_STACK` | `mixed` | sing-box TUN stack：`system`、`gvisor`、`mixed` |
 
 ### SOCKS5 outbound
