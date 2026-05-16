@@ -1,6 +1,6 @@
 # openvpn-out
 
-单容器 OpenVPN Server + sing-box TUN + SOCKS5 outbound 镜像。
+单容器 OpenVPN Server + sing-box TUN + Mix outbound 镜像。
 
 镜像名：`ghcr.io/lanlan13-14/openvpn-out`
 
