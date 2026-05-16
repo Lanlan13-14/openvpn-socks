@@ -133,6 +133,7 @@ load_env_file /env/runtime.env
 : "${DNSMASQ_LOG_QUERIES:=0}"
 : "${ENABLE_DIAGNOSTICS:=0}"
 : "${PROXY_CHECK_URL:=https://www.cloudflare.com/cdn-cgi/trace}"
+: "${PROXY_CHECK_IPV6_URL:=https://[2606:4700:4700::1111]/cdn-cgi/trace}"
 
 if [ "${OVPN_DNS}" = "auto" ] || [ -z "${OVPN_DNS}" ]; then
   if [ "${DNSMASQ_ENABLED}" = "1" ] || [ "${DNSMASQ_ENABLED}" = "true" ]; then
@@ -146,7 +147,7 @@ export OVPN_PROTO OVPN_PORT OVPN_DEV OVPN_DNS OVPN_NETWORK OVPN_NETMASK OVPN_CID
 export OVPN_CIPHER OVPN_DATA_CIPHERS OVPN_AUTH OVPN_VERB OVPN_DUPLICATE_CN_CONFIG OVPN_CLIENT_TO_CLIENT_CONFIG OVPN_PRESERVE_TEMPLATE IPV6_ENABLED OVPN_IPV6_CIDR OVPN_IPV6_CONFIG
 export PROXY_TYPE PROXY_HOST PROXY_PORT PROXY_USER PROXY_PASS PROXY_PASSWORD PROXY_METHOD PROXY_UDP PROXY_TLS_SERVER_NAME PROXY_TLS_INSECURE PROXY_TLS_ALPN
 export TABLE_ID TABLE_PRIORITY MARK TPROXY_PORT TPROXY_BACKEND FULL_PROXY SING_BOX_LOG_LEVEL SING_TUN_NAME SING_TUN_ADDRESS SING_TUN_ADDRESS6 SING_TUN_DNS_ADDRESS SING_TUN_MTU SING_TUN_STACK
-export DNS_SERVER_TYPE DNS_SERVER DNS_SERVER_PORT DNS_PATH DNS_TLS_SERVER_NAME DNS_TLS_INSECURE DNS_TLS_ALPN DNS_STRATEGY DNS_DETOUR DNSMASQ_ENABLED DNSMASQ_PORT DNSMASQ_UPSTREAM DNSMASQ_CACHE_SIZE DNSMASQ_LOG_QUERIES ENABLE_DIAGNOSTICS PROXY_CHECK_URL
+export DNS_SERVER_TYPE DNS_SERVER DNS_SERVER_PORT DNS_PATH DNS_TLS_SERVER_NAME DNS_TLS_INSECURE DNS_TLS_ALPN DNS_STRATEGY DNS_DETOUR DNSMASQ_ENABLED DNSMASQ_PORT DNSMASQ_UPSTREAM DNSMASQ_CACHE_SIZE DNSMASQ_LOG_QUERIES ENABLE_DIAGNOSTICS PROXY_CHECK_URL PROXY_CHECK_IPV6_URL
 
 cleanup_legacy_rules
 
@@ -344,12 +345,12 @@ if [ "${ENABLE_DIAGNOSTICS}" = "1" ] || [ "${ENABLE_DIAGNOSTICS}" = "true" ]; th
       log "[diag] checking IPv6 outbound via proxy..."
       case "${PROXY_TYPE}" in
         anytls)
-          curl -6 -fsS --connect-timeout 5 --max-time 12 "https://ifconfig.co/ip" || log "[diag] IPv6 outbound check failed"
+          curl -fsS --connect-timeout 5 --max-time 12 "${PROXY_CHECK_IPV6_URL}" || log "[diag] IPv6 outbound check failed"
           ;;
         *)
-          curl -6 -fsS --connect-timeout 5 --max-time 12 \
+          curl -fsS --connect-timeout 5 --max-time 12 \
             --socks5-hostname "${PROXY_USER:+${PROXY_USER}:${PROXY_PASS}@}${PROXY_HOST}:${PROXY_PORT}" \
-            "https://ifconfig.co/ip" || log "[diag] IPv6 outbound check failed"
+            "${PROXY_CHECK_IPV6_URL}" || log "[diag] IPv6 outbound check failed"
           ;;
       esac
     fi

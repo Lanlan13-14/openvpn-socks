@@ -263,7 +263,8 @@ docker run -d \
 | --- | --- | --- |
 | `SING_BOX_LOG_LEVEL` | `warning` | sing-box 日志级别 |
 | `ENABLE_DIAGNOSTICS` | `0` | 设为 `1` 打印 sing-box 配置、接口、策略路由、iptables 规则并做 SOCKS/DoH 检测 |
-| `PROXY_CHECK_URL` | `https://www.cloudflare.com/cdn-cgi/trace` | 诊断模式下测试 SOCKS5 TCP 出站的 URL |
+| `PROXY_CHECK_URL` | `https://www.cloudflare.com/cdn-cgi/trace` | 诊断模式下测试 TCP 出站的 URL |
+| `PROXY_CHECK_IPV6_URL` | `https://[2606:4700:4700::1111]/cdn-cgi/trace` | 诊断模式下测试 IPv6 目标出站的 URL；SOCKS 场景下不强制 curl 以 IPv6 连接 SOCKS 服务器 |
 
 ## br-lan 模式（OpenWrt / 路由器场景）
 
