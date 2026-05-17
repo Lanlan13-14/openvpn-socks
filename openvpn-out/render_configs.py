@@ -70,13 +70,11 @@ def build_proxy_outbound():
             'server': host,
             'server_port': port,
         }
-        if truthy(env('PROXY_UOT')):
+        if env('PROXY_UDP_OVER_TCP', env('PROXY_UOT', env('PROXY_UDP', ''))).strip():
             outbound['udp_over_tcp'] = {
-                'enabled': True,
+                'enabled': truthy(env('PROXY_UDP_OVER_TCP', env('PROXY_UOT', env('PROXY_UDP', 'true')))),
                 'version': maybe_int(env('PROXY_UOT_VERSION'), 2),
             }
-        elif env('PROXY_UDP_OVER_TCP', env('PROXY_UDP', '')).strip():
-            outbound['udp_over_tcp'] = truthy(env('PROXY_UDP_OVER_TCP', env('PROXY_UDP', 'true')))
         user = env('PROXY_USER')
         password = env('PROXY_PASS')
         if user:
@@ -115,13 +113,11 @@ def build_proxy_outbound():
             'method': method,
             'password': password,
         }
-        if truthy(env('PROXY_UOT')):
+        if env('PROXY_UDP_OVER_TCP', env('PROXY_UOT', env('PROXY_UDP', ''))).strip():
             outbound['udp_over_tcp'] = {
-                'enabled': True,
+                'enabled': truthy(env('PROXY_UDP_OVER_TCP', env('PROXY_UOT', env('PROXY_UDP', 'true')))),
                 'version': maybe_int(env('PROXY_UOT_VERSION'), 2),
             }
-        elif env('PROXY_UDP_OVER_TCP', env('PROXY_UDP', '')).strip():
-            outbound['udp_over_tcp'] = truthy(env('PROXY_UDP_OVER_TCP', env('PROXY_UDP', 'true')))
         plugin = env('PROXY_PLUGIN')
         if plugin:
             outbound['plugin'] = plugin

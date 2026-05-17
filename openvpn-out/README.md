@@ -114,7 +114,6 @@ PROXY_PASS=pass
 PROXY_PASSWORD=
 PROXY_METHOD=2022-blake3-aes-128-gcm
 PROXY_UDP_OVER_TCP=true
-PROXY_UOT=0
 PROXY_UOT_VERSION=2
 PROXY_PLUGIN=
 PROXY_PLUGIN_OPTS=
@@ -458,7 +457,7 @@ docker run -d \
 
 无认证 SOCKS5 时去掉 `PROXY_USER` / `PROXY_PASS`。
 
-`PROXY_UDP_OVER_TCP` 控制 sing-box 的 `udp_over_tcp`，不是原生 UDP 开关。旧变量 `PROXY_UDP` 仍兼容，但推荐使用 `PROXY_UDP_OVER_TCP`。
+`PROXY_UDP_OVER_TCP` 控制 sing-box 的 `udp_over_tcp` 开关，`PROXY_UOT_VERSION` 控制 UDP over TCP 版本；不是原生 UDP 开关。旧变量 `PROXY_UOT` / `PROXY_UDP` 仍兼容，但推荐使用 `PROXY_UDP_OVER_TCP`。
 
 ### 1. 普通 SOCKS
 
@@ -582,8 +581,8 @@ docker run -d \
 | `PROXY_TYPE` | `socks` | 上游出站类型：`socks`、`anytls`、`shadowsocks`、`ss`、`ss2022` |
 | `PROXY_PASSWORD` | 空 | AnyTLS / Shadowsocks 密码 |
 | `PROXY_METHOD` | `2022-blake3-aes-128-gcm` | Shadowsocks 加密方法；非 2022 也可配置 |
-| `PROXY_UOT` | `0` | 是否启用 UoT（UDP over TCP） |
-| `PROXY_UOT_VERSION` | `2` | UoT 版本：`1` 或 `2` |
+| `PROXY_UDP_OVER_TCP` | `true` | 是否启用 sing-box `udp_over_tcp`；旧变量 `PROXY_UOT` / `PROXY_UDP` 仍兼容，但推荐使用当前变量 |
+| `PROXY_UOT_VERSION` | `2` | UDP over TCP 版本：`1` 或 `2`，启用 `PROXY_UDP_OVER_TCP=true` 时生效 |
 | `PROXY_PLUGIN` | 空 | Shadowsocks SIP003 插件名 |
 | `PROXY_PLUGIN_OPTS` | 空 | Shadowsocks 插件参数 |
 | `PROXY_NETWORK` | 空 | Shadowsocks 启用网络：`tcp,udp` |
@@ -607,7 +606,6 @@ docker run -d \
 | `PROXY_PORT` | 必填 | 上游 SOCKS5 端口 |
 | `PROXY_USER` | 空 | 上游 SOCKS5 用户名 |
 | `PROXY_PASS` | 空 | 上游 SOCKS5 密码 |
-| `PROXY_UDP_OVER_TCP` | `true` | 是否启用 sing-box `udp_over_tcp`；变量名更明确，旧变量 `PROXY_UDP` 仍兼容 |
 
 ### DNS
 
