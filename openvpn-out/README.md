@@ -121,6 +121,21 @@ PROXY_NETWORK=
 PROXY_TLS_SERVER_NAME=
 PROXY_TLS_INSECURE=0
 PROXY_TLS_ALPN=
+PROXY_UUID=
+PROXY_FLOW=
+PROXY_PACKET_ENCODING=
+PROXY_TLS_ENABLED=1
+PROXY_UTLS_ENABLED=0
+PROXY_UTLS_FINGERPRINT=chrome
+PROXY_REALITY_ENABLED=0
+PROXY_REALITY_PUBLIC_KEY=
+PROXY_REALITY_SHORT_ID=
+PROXY_TRANSPORT=
+PROXY_WS_PATH=/
+PROXY_WS_HOST=
+PROXY_WS_HEADERS=
+PROXY_WS_MAX_EARLY_DATA=
+PROXY_WS_EARLY_DATA_HEADER_NAME=
 ```
 
 无认证 SOCKS5 时把 `PROXY_USER` 和 `PROXY_PASS` 留空即可。
@@ -501,7 +516,62 @@ docker run -d \
   ghcr.io/lanlan13-14/openvpn-out:latest
 ```
 
-### 3. SS2022 / AnyTLS 示例
+### 3. VLESS Vision Reality
+
+sing-box VLESS outbound 需要 `uuid`；Reality 位于 TLS outbound 的 `reality` 字段中，需要服务端提供 public key 和 short id。`flow=xtls-rprx-vision` 用于 Vision Reality。建议同时启用 uTLS 指纹。
+
+```bash
+docker run -d \
+  --name openvpn-out \
+  --network host \
+  --cap-add NET_ADMIN \
+  --cap-add SYS_MODULE \
+  --device /dev/net/tun \
+  -v /root/openvpn-out:/openvpn \
+  -e OVPN_SERVER_ADDR=server.example.com \
+  -e OVPN_PORT=1194 \
+  -e PROXY_TYPE=vless \
+  -e PROXY_HOST=vless.example.com \
+  -e PROXY_PORT=443 \
+  -e PROXY_UUID='00000000-0000-0000-0000-000000000000' \
+  -e PROXY_FLOW=xtls-rprx-vision \
+  -e PROXY_TLS_ENABLED=1 \
+  -e PROXY_TLS_SERVER_NAME=www.example.com \
+  -e PROXY_UTLS_ENABLED=1 \
+  -e PROXY_UTLS_FINGERPRINT=chrome \
+  -e PROXY_REALITY_ENABLED=1 \
+  -e PROXY_REALITY_PUBLIC_KEY='REALITY_PUBLIC_KEY' \
+  -e PROXY_REALITY_SHORT_ID='0123456789abcdef' \
+  ghcr.io/lanlan13-14/openvpn-out:latest
+```
+
+### 4. VLESS WebSocket TLS
+
+WebSocket 传输使用 sing-box V2Ray Transport 的 `ws` 类型；TLS 仍配置在 VLESS outbound 的 `tls` 字段中。`PROXY_WS_HOST` 会写入 WebSocket `Host` header，不填则不额外设置。
+
+```bash
+docker run -d \
+  --name openvpn-out \
+  --network host \
+  --cap-add NET_ADMIN \
+  --cap-add SYS_MODULE \
+  --device /dev/net/tun \
+  -v /root/openvpn-out:/openvpn \
+  -e OVPN_SERVER_ADDR=server.example.com \
+  -e OVPN_PORT=1194 \
+  -e PROXY_TYPE=vless \
+  -e PROXY_HOST=vless.example.com \
+  -e PROXY_PORT=443 \
+  -e PROXY_UUID='00000000-0000-0000-0000-000000000000' \
+  -e PROXY_TLS_ENABLED=1 \
+  -e PROXY_TLS_SERVER_NAME=vless.example.com \
+  -e PROXY_TRANSPORT=ws \
+  -e PROXY_WS_PATH=/vless \
+  -e PROXY_WS_HOST=vless.example.com \
+  ghcr.io/lanlan13-14/openvpn-out:latest
+```
+
+### 5. SS2022 / AnyTLS 示例
 
 SS2022：
 
@@ -578,7 +648,7 @@ docker run -d \
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `TPROXY_BACKEND` | `tun` | 保留兼容变量；当前默认 datapath 为 sing-box TUN |
-| `PROXY_TYPE` | `socks` | 上游出站类型：`socks`、`anytls`、`shadowsocks`、`ss`、`ss2022` |
+| `PROXY_TYPE` | `socks` | 上游出站类型：`socks`、`anytls`、`shadowsocks`、`ss`、`ss2022`、`vless` |
 | `PROXY_PASSWORD` | 空 | AnyTLS / Shadowsocks 密码 |
 | `PROXY_METHOD` | `2022-blake3-aes-128-gcm` | Shadowsocks 加密方法；非 2022 也可配置 |
 | `PROXY_UDP_OVER_TCP` | `true` | 是否启用 sing-box `udp_over_tcp`；旧变量 `PROXY_UOT` / `PROXY_UDP` 仍兼容，但推荐使用当前变量 |
@@ -588,7 +658,22 @@ docker run -d \
 | `PROXY_NETWORK` | 空 | Shadowsocks 启用网络：`tcp,udp` |
 | `PROXY_TLS_SERVER_NAME` | 空 | AnyTLS TLS SNI |
 | `PROXY_TLS_INSECURE` | `0` | AnyTLS 是否忽略证书校验 |
-| `PROXY_TLS_ALPN` | 空 | AnyTLS TLS ALPN，逗号分隔 |
+| `PROXY_TLS_ALPN` | 空 | TLS ALPN，逗号分隔 |
+| `PROXY_UUID` | 空 | VLESS UUID，`PROXY_TYPE=vless` 时必填 |
+| `PROXY_FLOW` | 空 | VLESS flow；Vision Reality 常用 `xtls-rprx-vision` |
+| `PROXY_PACKET_ENCODING` | 空 | VLESS UDP packet encoding，例如 `xudp`、`packetaddr` |
+| `PROXY_TLS_ENABLED` | `1` | VLESS TLS 开关；Reality 和 WS TLS 通常保持启用 |
+| `PROXY_UTLS_ENABLED` | `0` | VLESS TLS 是否启用 uTLS |
+| `PROXY_UTLS_FINGERPRINT` | `chrome` | uTLS fingerprint，启用 uTLS 时使用 |
+| `PROXY_REALITY_ENABLED` | `0` | VLESS Reality 开关 |
+| `PROXY_REALITY_PUBLIC_KEY` | 空 | Reality public key，启用 Reality 时必填 |
+| `PROXY_REALITY_SHORT_ID` | 空 | Reality short id，按服务端提供填写 |
+| `PROXY_TRANSPORT` | 空 | VLESS transport；当前支持 `ws` / `websocket` |
+| `PROXY_WS_PATH` | `/` | WebSocket path |
+| `PROXY_WS_HOST` | 空 | WebSocket Host header |
+| `PROXY_WS_HEADERS` | 空 | WebSocket headers，JSON object，例如 `{"Host":"example.com"}` |
+| `PROXY_WS_MAX_EARLY_DATA` | 空 | WebSocket max early data，留空不写入 |
+| `PROXY_WS_EARLY_DATA_HEADER_NAME` | 空 | WebSocket early data header name |
 | `TABLE_ID` | `100` | OpenVPN CIDR 策略路由表 |
 | `TABLE_PRIORITY` | `10000` | 策略路由优先级 |
 | `SING_TUN_NAME` | `sb-tun0` | sing-box TUN 接口名 |
