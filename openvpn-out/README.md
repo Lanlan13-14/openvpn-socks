@@ -215,7 +215,6 @@ OVPN_DUPLICATE_CN=1
 | DoT/DoQ + 走代理 | 想用 TLS/QUIC DNS | `DNS_SERVER_TYPE=tls` 或 `quic`、`DNS_SERVER_PORT=853`、`DNS_DETOUR=proxy` | DNS 加密并走上游代理。 |
 | 普通 UDP/TCP DNS + 走代理 | 上游只提供 53 端口 DNS | `DNS_SERVER_TYPE=udp` 或 `tcp`、`DNS_SERVER_PORT=53`、`DNS_DETOUR=proxy` | DNS 本身不加密，但请求仍从代理出口发出。 |
 | 远程 DNS 直连 | 只想代理业务流量，DNS 由宿主网络直连 | `DNS_DETOUR=direct` | 可能暴露 DNS 查询给宿主机所在网络，不建议在防泄漏场景使用。 |
-| 不启用 dnsmasq | 需要客户端直接打到 sing-box DNS | `DNSMASQ_ENABLED=0`、`OVPN_DNS=172.19.0.2` | 仅在客户端能路由到 `172.19.0.2` 时使用；否则客户端会无法解析。 |
 | 自定义客户端 DNS | 客户端使用外部 DNS | `OVPN_DNS=8.8.8.8` 等 | 会绕过容器内 dnsmasq/sing-box DNS 链路，可能 DNS 泄漏。 |
 | IPv6 优先/仅 IPv6 | IPv6 出口测试 | `IPV6_ENABLED=1`、`DNS_STRATEGY=prefer_ipv6` 或 `ipv6_only` | 需要上游代理、远程 DNS、目标网络都支持 IPv6。 |
 
@@ -361,32 +360,7 @@ DNS_DETOUR=direct
 DNS_STRATEGY=prefer_ipv4
 ```
 
-### 8. 关闭 dnsmasq，客户端直接使用 sing-box DNS
-
-仅在客户端能访问 `SING_TUN_DNS_ADDRESS` 时使用。默认地址 `172.19.0.2` 是 sing-box TUN DNS 劫持地址。
-
-```env
-DNSMASQ_ENABLED=0
-SING_TUN_DNS_ADDRESS=172.19.0.2
-OVPN_DNS=172.19.0.2
-DNS_SERVER_TYPE=https
-DNS_SERVER=1.1.1.1
-DNS_SERVER_PORT=443
-DNS_PATH=/dns-query
-DNS_TLS_SERVER_NAME=cloudflare-dns.com
-DNS_DETOUR=proxy
-DNS_STRATEGY=prefer_ipv4
-```
-
-如果客户端无法解析域名，改回推荐链路：
-
-```env
-OVPN_DNS=auto
-DNSMASQ_ENABLED=1
-DNSMASQ_UPSTREAM=172.19.0.2#53
-```
-
-### 9. 自定义推送给客户端的 DNS
+### 8. 自定义推送给客户端的 DNS
 
 如果设置外部 DNS，例如：
 
@@ -404,7 +378,7 @@ OVPN_SERVER_IP=10.9.0.1
 OVPN_DNS=auto
 ```
 
-### 10. IPv6 DNS 策略组合
+### 9. IPv6 DNS 策略组合
 
 开启 IPv6 后，DNS 解析策略可按需要调整：
 
