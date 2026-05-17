@@ -120,6 +120,7 @@ PROXY_PLUGIN_OPTS=
 PROXY_NETWORK=
 PROXY_TLS_SERVER_NAME=
 PROXY_TLS_INSECURE=0
+PROXY_SKIP_CERT_VERIFY=0
 PROXY_TLS_ALPN=
 PROXY_UUID=
 PROXY_FLOW=
@@ -658,6 +659,7 @@ docker run -d \
 | `PROXY_NETWORK` | 空 | Shadowsocks 启用网络：`tcp,udp` |
 | `PROXY_TLS_SERVER_NAME` | 空 | AnyTLS TLS SNI |
 | `PROXY_TLS_INSECURE` | `0` | AnyTLS 是否忽略证书校验 |
+| `PROXY_SKIP_CERT_VERIFY` | `0` | `PROXY_TLS_INSECURE` 的兼容别名；设为 `true` 时同样写入 sing-box TLS `insecure: true` |
 | `PROXY_TLS_ALPN` | 空 | TLS ALPN，逗号分隔 |
 | `PROXY_UUID` | 空 | VLESS UUID，`PROXY_TYPE=vless` 时必填 |
 | `PROXY_FLOW` | 空 | VLESS flow；Vision Reality 常用 `xtls-rprx-vision` |

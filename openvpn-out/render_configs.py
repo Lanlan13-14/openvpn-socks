@@ -30,7 +30,10 @@ def build_tls(prefix):
     server_name = env(f'{prefix}_TLS_SERVER_NAME')
     if server_name:
         cfg['server_name'] = server_name
-    if truthy(env(f'{prefix}_TLS_INSECURE')):
+    insecure = env(f'{prefix}_TLS_INSECURE')
+    if prefix == 'PROXY' and not insecure:
+        insecure = env('PROXY_SKIP_CERT_VERIFY')
+    if truthy(insecure):
         cfg['insecure'] = True
     alpn = env(f'{prefix}_TLS_ALPN')
     if alpn:
@@ -163,9 +166,10 @@ def build_proxy_outbound():
             'server_port': port,
             'password': password,
         }
-        tls = build_tls('PROXY')
-        if not tls:
-            tls = {'server_name': env('PROXY_TLS_SERVER_NAME', host)}
+        tls = {'enabled': True}
+        tls.update(build_tls('PROXY'))
+        if not tls.get('server_name'):
+            tls['server_name'] = host
         outbound['tls'] = tls
         return outbound
 
