@@ -481,7 +481,7 @@ docker run -d \
   ghcr.io/lanlan13-14/openvpn-out:latest
 ```
 
-### 2. 普通 SS + UoT
+### 2. 普通 SS + UDP over TCP
 
 ```bash
 docker run -d \
@@ -498,8 +498,7 @@ docker run -d \
   -e PROXY_PORT=8388 \
   -e PROXY_METHOD=aes-128-gcm \
   -e PROXY_PASSWORD='ss-password' \
-  -e PROXY_UOT=1 \
-  -e PROXY_UOT_VERSION=2 \
+  -e PROXY_UDP_OVER_TCP=true \
   ghcr.io/lanlan13-14/openvpn-out:latest
 ```
 
