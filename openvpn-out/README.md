@@ -11,7 +11,7 @@ OpenVPN client
   -> OpenVPN Server inside container, interface ovpn0
   -> policy route from OpenVPN CIDR
   -> sing-box TUN interface sb-tun0
-  -> anytls / shadowsocks 2022 / SOCKS5 outbound
+  -> anytls / shadowsocks 2022 / SOCKS5 / vless outbound
 ```
 
 DNS 默认链路：
