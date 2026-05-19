@@ -128,6 +128,20 @@ def build_dns_server():
     return server
 
 
+def build_domain_resolver(default_strategy='prefer_ipv4'):
+    return {
+        'server': 'remote',
+        'strategy': env('DNS_STRATEGY', default_strategy),
+    }
+
+
+def add_domain_resolver(outbound):
+    if env('PROXY_DOMAIN_RESOLVER', '').strip().lower() in {'0', 'false', 'off', 'no'}:
+        return outbound
+    outbound['domain_resolver'] = build_domain_resolver()
+    return outbound
+
+
 def build_proxy_outbound():
     proxy_type = env('PROXY_TYPE', 'socks').strip().lower() or 'socks'
     host = env('PROXY_HOST')
@@ -153,7 +167,7 @@ def build_proxy_outbound():
             outbound['username'] = user
         if password:
             outbound['password'] = password
-        return outbound
+        return add_domain_resolver(outbound)
 
     if proxy_type == 'anytls':
         password = env('PROXY_PASSWORD', env('PROXY_PASS'))
@@ -171,7 +185,7 @@ def build_proxy_outbound():
         if not tls.get('server_name'):
             tls['server_name'] = host
         outbound['tls'] = tls
-        return outbound
+        return add_domain_resolver(outbound)
 
     if proxy_type in {'shadowsocks', 'ss', 'ss2022'}:
         method = env('PROXY_METHOD', '2022-blake3-aes-128-gcm')
@@ -200,7 +214,7 @@ def build_proxy_outbound():
         network = env('PROXY_NETWORK')
         if network:
             outbound['network'] = split_csv(network)
-        return outbound
+        return add_domain_resolver(outbound)
 
     if proxy_type == 'vless':
         uuid = env('PROXY_UUID')
@@ -228,7 +242,7 @@ def build_proxy_outbound():
         transport = build_vless_transport()
         if transport:
             outbound['transport'] = transport
-        return outbound
+        return add_domain_resolver(outbound)
 
     raise SystemExit(f'unsupported PROXY_TYPE: {proxy_type}')
 
@@ -242,13 +256,6 @@ def build_config():
         'log': {'level': env('SING_BOX_LOG_LEVEL', 'warning')},
         'dns': {
             'servers': [build_dns_server()],
-            'rules': [
-                {
-                    'action': 'route',
-                    'server': 'remote',
-                    'strategy': env('DNS_STRATEGY', 'prefer_ipv4'),
-                }
-            ],
             'final': 'remote',
         },
         'inbounds': [

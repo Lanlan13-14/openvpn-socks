@@ -16,13 +16,7 @@
         "detour": "${DNS_DETOUR}"
       }
     ],
-    "rules": [
-      {
-        "action": "route",
-        "server": "remote",
-        "strategy": "${DNS_STRATEGY}"
-      }
-    ],
+    "rules": [],
     "final": "remote"
   },
   "inbounds": [
@@ -52,6 +46,10 @@
       "server_port": ${PROXY_PORT},
       "username": "${PROXY_USER}",
       "password": "${PROXY_PASS}",
+      "domain_resolver": {
+        "server": "remote",
+        "strategy": "${DNS_STRATEGY}"
+      },
       "udp_over_tcp": ${PROXY_UDP_OVER_TCP}
     }
   ],

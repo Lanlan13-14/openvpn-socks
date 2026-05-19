@@ -166,6 +166,7 @@ DNS_TLS_INSECURE=0
 DNS_TLS_ALPN=
 DNS_DETOUR=proxy
 DNS_STRATEGY=prefer_ipv4
+PROXY_DOMAIN_RESOLVER=1
 DNSMASQ_ENABLED=1
 DNSMASQ_PORT=53
 DNSMASQ_UPSTREAM=172.19.0.2#53
@@ -219,6 +220,7 @@ OVPN_DUPLICATE_CN=1
 1. `OVPN_DNS`：OpenVPN 推送给客户端的 DNS。默认 `auto`，即推送 `OVPN_SERVER_IP`（默认 `10.8.0.1`）。
 2. `DNSMASQ_ENABLED`：是否在容器内用 dnsmasq 监听 `OVPN_SERVER_IP:DNSMASQ_PORT`，作为客户端 DNS 入口和缓存层。
 3. `DNS_SERVER_TYPE` / `DNS_SERVER` / `DNS_DETOUR`：sing-box 最终访问的远程 DNS，以及 DNS 查询是否走代理。
+4. `DNS_STRATEGY`：按 sing-box 1.12+ 新写法写入出站 `domain_resolver.strategy`，用于上游代理服务器域名解析时的 IPv4/IPv6 优先级；不再写入已在 sing-box 1.14 废弃的 DNS 规则 `strategy`。
 
 推荐保持 `OVPN_DNS=auto`、`DNSMASQ_ENABLED=1`。这样客户端只需要使用 OpenVPN 推送的 `10.8.0.1`，容器会自动把 DNS 转到 sing-box TUN DNS 地址 `172.19.0.2:53`，再按远程 DNS 配置解析。
 
@@ -231,7 +233,7 @@ OVPN_DUPLICATE_CN=1
 | 普通 UDP/TCP DNS + 走代理 | 上游只提供 53 端口 DNS | `DNS_SERVER_TYPE=udp` 或 `tcp`、`DNS_SERVER_PORT=53`、`DNS_DETOUR=proxy` | DNS 本身不加密，但请求仍从代理出口发出。 |
 | 远程 DNS 直连 | 只想代理业务流量，DNS 由宿主网络直连 | `DNS_DETOUR=direct` | 可能暴露 DNS 查询给宿主机所在网络，不建议在防泄漏场景使用。 |
 | 自定义客户端 DNS | 客户端使用外部 DNS | `OVPN_DNS=8.8.8.8` 等 | 会绕过容器内 dnsmasq/sing-box DNS 链路，可能 DNS 泄漏。 |
-| IPv6 优先/仅 IPv6 | IPv6 出口测试 | `IPV6_ENABLED=1`、`DNS_STRATEGY=prefer_ipv6` 或 `ipv6_only` | 需要上游代理、远程 DNS、目标网络都支持 IPv6。 |
+| IPv6 优先/仅 IPv6 | IPv6 出口测试 | `IPV6_ENABLED=1`、`DNS_STRATEGY=prefer_ipv6` 或 `ipv6_only` | 通过出站 `domain_resolver.strategy` 控制上游代理服务器域名解析优先级；需要上游代理、远程 DNS、目标网络都支持 IPv6。 |
 
 ### 1. 推荐默认：DoH + 走代理 + dnsmasq
 
@@ -395,7 +397,7 @@ OVPN_DNS=auto
 
 ### 9. IPv6 DNS 策略组合
 
-开启 IPv6 后，DNS 解析策略可按需要调整：
+开启 IPv6 后，出站域名解析策略可按需要调整。项目会按 sing-box 1.12+ 新格式把该策略写入上游出站的 `domain_resolver.strategy`，不再使用 sing-box 1.14 已废弃的 DNS 规则 `strategy`：
 
 ```env
 IPV6_ENABLED=1
@@ -704,7 +706,8 @@ docker run -d \
 | `DNS_PATH` | `/dns-query` | 远程 HTTPS/H3 DNS 路径 |
 | `DNS_TLS_SERVER_NAME` | `cloudflare-dns.com` | TLS 相关 DNS 的 SNI / 证书域名 |
 | `DNS_DETOUR` | `proxy` | DNS 查询出站：`proxy` 走上游，`direct` 直连；默认强制走代理 |
-| `DNS_STRATEGY` | `prefer_ipv4` | `prefer_ipv4`、`prefer_ipv6`、`ipv4_only`、`ipv6_only` |
+| `DNS_STRATEGY` | `prefer_ipv4` | 出站 `domain_resolver.strategy`：`prefer_ipv4`、`prefer_ipv6`、`ipv4_only`、`ipv6_only` |
+| `PROXY_DOMAIN_RESOLVER` | `1` | 为上游出站写入 sing-box 1.12+ `domain_resolver`；设为 `0` 可关闭 |
 | `DNSMASQ_ENABLED` | `1` | 启用 dnsmasq 作为客户端 DNS 缓存层 |
 | `DNSMASQ_PORT` | `53` | dnsmasq 监听端口 |
 | `DNSMASQ_UPSTREAM` | `172.19.0.2#53` | dnsmasq 上游，默认 sing-box TUN DNS 地址 |
