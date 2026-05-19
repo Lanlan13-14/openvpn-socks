@@ -257,6 +257,7 @@ def build_config():
         'dns': {
             'servers': [build_dns_server()],
             'final': 'remote',
+            'strategy': env('DNS_STRATEGY', 'prefer_ipv4'),
         },
         'inbounds': [
             {
